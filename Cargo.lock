@@ -125,6 +125,7 @@ dependencies = [
 name = "dario-server"
 version = "0.1.0"
 dependencies = [
+ "dario-progress",
  "tiny_http",
 ]
 

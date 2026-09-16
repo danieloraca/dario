@@ -10,6 +10,7 @@ ExecStart=/home/danutz/Development/dario/target/release/dario-server
 Restart=on-failure
 RestartSec=2
 Environment=DARIO_ADDR=0.0.0.0:3041
+Environment=DARIO_SAVE_DIR=/home/danutz/Development/dario/data/saves
 
 [Install]
 WantedBy=multi-user.target

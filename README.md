@@ -46,6 +46,8 @@ make deploy
 
 This builds the browser game, uploads it to `danutz@192.168.0.25`, builds the server on the Pi, installs it into `~/Development/dario`, restarts only Dario, and checks the page and WASM response on port 3041. SSH and sudo prompt in your terminal as needed. The server build finishes before the running service is stopped. You can change the SSH destination with `make deploy PI_HOST=danutz@hostname`.
 
+The server stores player JSON saves in `data/saves/`, outside the browser build. Set `DARIO_SAVE_DIR` to change that directory. The Pi service uses `/home/danutz/Development/dario/data/saves`; the deployment installer replaces only assets and the binary, preserving these saves. Back up this directory to keep all players' progress. Player names are shared local-game profiles, without passwords; use the same name to continue from another browser on your trusted network.
+
 To run just the server once `target/web/` is built:
 
 ```sh

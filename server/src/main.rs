@@ -1,5 +1,6 @@
 use std::{env, fs::File, io, path::Path};
 use tiny_http::{Header, Method, Request, Response, Server};
+mod saves;
 
 const WEB_ROOT: &str = "target/web";
 const ASSETS: &[(&str, &str)] = &[
@@ -30,6 +31,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     let address = env::var("DARIO_ADDR").unwrap_or_else(|_| "127.0.0.1:3041".into());
+    let save_root = env::var_os("DARIO_SAVE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "data/saves".into());
     let server = Server::http(&address)?;
     println!(
         "Dario listening on http://{} (serving {})",
@@ -38,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
     loop {
         let request = server.recv()?;
-        if let Err(error) = respond(request, root) {
+        if let Err(error) = respond(request, root, &save_root) {
             eprintln!("Could not send response: {error}");
         }
     }
@@ -48,7 +52,16 @@ fn header(name: &str, value: &str) -> Header {
     Header::from_bytes(name, value).expect("valid static HTTP header")
 }
 
-fn respond(request: Request, root: &Path) -> io::Result<()> {
+fn respond(request: Request, root: &Path, save_root: &Path) -> io::Result<()> {
+    if request
+        .url()
+        .split('?')
+        .next()
+        .unwrap_or("")
+        .starts_with("/api/progress/")
+    {
+        return saves::respond(request, save_root);
+    }
     if !matches!(request.method(), Method::Get | Method::Head) {
         return request.respond(
             Response::from_string("Method not allowed\n")
@@ -115,6 +128,21 @@ mod tests {
         }
 
         fn request(&self, method: &str, path: &str) -> (String, Vec<u8>) {
+            self.request_body(method, path, &[])
+        }
+
+        fn request_body(&self, method: &str, path: &str, body: &[u8]) -> (String, Vec<u8>) {
+            self.request_custom(method, path, body, "close", body.len())
+        }
+
+        fn request_custom(
+            &self,
+            method: &str,
+            path: &str,
+            body: &[u8],
+            connection: &str,
+            length: usize,
+        ) -> (String, Vec<u8>) {
             let server = Server::http("127.0.0.1:0").unwrap();
             let address = server.server_addr().to_ip().unwrap();
             let root = self.0.clone();
@@ -123,7 +151,7 @@ mod tests {
                     .recv_timeout(Duration::from_secs(5))
                     .unwrap()
                     .expect("request within timeout");
-                respond(request, &root).unwrap();
+                respond(request, &root, &root.join("saves")).unwrap();
             });
             let mut stream = TcpStream::connect(address).unwrap();
             stream
@@ -131,9 +159,11 @@ mod tests {
                 .unwrap();
             write!(
                 stream,
-                "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+                "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: {connection}\r\nContent-Type: application/json\r\nContent-Length: {length}\r\n\r\n"
             )
             .unwrap();
+            stream.write_all(body).unwrap();
+            stream.shutdown(std::net::Shutdown::Write).unwrap();
             let mut bytes = Vec::new();
             stream.read_to_end(&mut bytes).unwrap();
             worker.join().unwrap();
@@ -152,6 +182,71 @@ mod tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.0).unwrap();
         }
+    }
+
+    #[test]
+    fn rejects_upgrade_requests_with_a_misleading_body_length() {
+        let files = WebFiles::new();
+        let (headers, _) = files.request_custom(
+            "PUT",
+            "/api/progress/alex",
+            &dario_progress::Progress::default().encode(),
+            "upgrade",
+            1,
+        );
+        assert!(headers.starts_with("HTTP/1.1 400"), "{headers}");
+        assert!(!files.0.join("saves/alex.json").exists());
+    }
+
+    #[test]
+    fn player_saves_round_trip_merge_and_stay_separate() {
+        use dario_progress::Progress;
+        let files = WebFiles::new();
+        let (headers, bytes) = files.request("GET", "/api/progress/alex");
+        assert!(headers.starts_with("HTTP/1.1 200"));
+        assert_eq!(Progress::decode(&bytes).unwrap(), Progress::default());
+        let mut first = Progress::default();
+        first.finish(0, 40_000, 5100, true, false);
+        let (headers, _) = files.request_body("PUT", "/api/progress/alex", &first.encode());
+        assert!(headers.starts_with("HTTP/1.1 200"));
+        let mut stale = Progress::default();
+        stale.finish(0, 60_000, 4200, false, true);
+        files.request_body("PUT", "/api/progress/alex", &stale.encode());
+        let (_, bytes) = files.request("GET", "/api/progress/alex");
+        let saved = Progress::decode(&bytes).unwrap();
+        assert_eq!(saved.levels[0].best_ms, Some(40_000));
+        assert!(saved.levels[0].treasure_medal);
+        assert_eq!(
+            saved,
+            dario_progress::file::load(&files.0.join("saves/alex.json")).unwrap()
+        );
+        let (_, bytes) = files.request("GET", "/api/progress/sam");
+        assert_eq!(Progress::decode(&bytes).unwrap(), Progress::default());
+    }
+
+    #[test]
+    fn invalid_requests_and_damaged_saves_cannot_overwrite_progress() {
+        let files = WebFiles::new();
+        for profile in ["../private", "%2e%2e", "alex/other", "", "Alex"] {
+            let (headers, _) = files.request("GET", &format!("/api/progress/{profile}"));
+            assert!(headers.starts_with("HTTP/1.1 400"), "{headers}");
+        }
+        let (headers, _) = files.request_body("PUT", "/api/progress/alex", b"{bad");
+        assert!(headers.starts_with("HTTP/1.1 400"));
+        let (headers, _) = files.request_body("PUT", "/api/progress/alex", &vec![b' '; 17_000]);
+        assert!(headers.starts_with("HTTP/1.1 413"));
+        fs::create_dir(files.0.join("saves")).unwrap();
+        let path = files.0.join("saves/alex.json");
+        fs::write(&path, b"damaged").unwrap();
+        let (headers, _) = files.request_body(
+            "PUT",
+            "/api/progress/alex",
+            &dario_progress::Progress::default().encode(),
+        );
+        assert!(headers.starts_with("HTTP/1.1 409"));
+        assert_eq!(fs::read(path).unwrap(), b"damaged");
+        let (headers, _) = files.request("GET", "/saves/alex.json");
+        assert!(headers.starts_with("HTTP/1.1 404"));
     }
 
     #[test]
