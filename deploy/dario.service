@@ -1,0 +1,15 @@
+[Unit]
+Description=Dario web app
+After=network.target
+
+[Service]
+Type=simple
+User=danutz
+WorkingDirectory=/home/danutz/Development/dario
+ExecStart=/home/danutz/Development/dario/target/release/dario-server
+Restart=on-failure
+RestartSec=2
+Environment=DARIO_ADDR=0.0.0.0:3041
+
+[Install]
+WantedBy=multi-user.target

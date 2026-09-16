@@ -3,6 +3,11 @@ name = "dario"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["server"]
+default-members = ["."]
+resolver = "3"
+
 [dependencies]
 macroquad = { version = "0.4.16", features = ["audio"] }
 

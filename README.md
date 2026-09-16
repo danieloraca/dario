@@ -25,7 +25,7 @@ This creates a locally signed app in `target/Dario.app`. It is intended for this
 
 ## Play in a browser
 
-The browser version runs the same Rust game, compiled to WebAssembly, including all music and effects. Install the target once, then start the local server (Python 3 is required):
+The browser version runs the same Rust game, compiled to WebAssembly, including all music and effects. Install the target once, then build the game and start its Rust web server (Python 3 is used only while assembling the browser build):
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -35,6 +35,25 @@ sh scripts/serve-web.sh
 Open [Dario in your browser](http://127.0.0.1:8080) and press Enter. To use another port, run `sh scripts/serve-web.sh 8081`. Stop the server with Ctrl+C. Rerun the command after editing Rust or web files to rebuild; there is no hot reload.
 
 A keyboard is required. The controls below also work in the browser; **Q returns to the title screen** there. Audio unlocks on your first keypress or click. Leaving the tab pauses the game and silences its audio; press P to resume. Fullscreen uses the browser's permission rules.
+
+For a Raspberry Pi that serves the game on port 3041 and starts it automatically after reboot, use the [systemd deployment guide](deploy/README.md) and [Dario service file](deploy/dario.service). The service runs `target/release/dario-server` from `~/Development/dario`, with `DARIO_ADDR=0.0.0.0:3041`, matching the existing Solitaire service layout.
+
+To deploy or redeploy from your Mac, run:
+
+```sh
+make deploy
+```
+
+This builds the browser game, uploads it to `danutz@192.168.0.25`, builds the server on the Pi, installs it into `~/Development/dario`, restarts only Dario, and checks the page and WASM response on port 3041. SSH and sudo prompt in your terminal as needed. The server build finishes before the running service is stopped. You can change the SSH destination with `make deploy PI_HOST=danutz@hostname`.
+
+To run just the server once `target/web/` is built:
+
+```sh
+cargo build --release --locked -p dario-server
+DARIO_ADDR=127.0.0.1:3041 ./target/release/dario-server
+```
+
+`dario-server` is a separate Rust package using [tiny_http](https://docs.rs/tiny_http/0.12.0/tiny_http/); it builds without the game's graphics or audio dependencies. It serves only the public game assets, supports GET and HEAD, and sends `.wasm` with `application/wasm`. Its default address is `127.0.0.1:3041`. Run it from the project directory; it checks that the complete browser build exists before listening. The `dario` binary still launches the desktop game.
 
 For static hosting, run `sh scripts/build-web.sh` and publish the contents of `target/web/`. Serve `.wasm` as `application/wasm` over HTTP(S), rather than opening the HTML as a local file. The build assembles the graphics and audio JavaScript runtime from the versions of Miniquad and quad-snd in `Cargo.lock`, so it uses no CDN or third-party requests. This also avoids an unused plugin error in Macroquad 0.4.16's prebuilt JavaScript bundle. See [Macroquad's WebAssembly documentation](https://github.com/not-fl3/macroquad#wasm).
 
@@ -65,9 +84,9 @@ Built with [Macroquad](https://macroquad.rs/); graphics and audio use its [offic
 ## Development
 
 ```sh
-cargo fmt --check
-cargo test
-cargo clippy --all-targets -- -D warnings
+cargo fmt --all --check
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 cargo run -- --smoke-test
 ```
 
@@ -78,5 +97,5 @@ cargo run -- --mute           # Start quietly
 cargo run -- --export-music   # Save dario-theme.wav without opening a window
 ```
 
-`src/world.rs` contains simulation and gameplay tests, `src/art.rs` draws the pixel art, `src/sound.rs` synthesizes PCM audio, and `src/main.rs` handles the window, keyboard, and fixed-step loop. `src/browser.rs` and `web/` provide the thin browser integration; the native build does not use them.
+`src/world.rs` contains simulation and gameplay tests, `src/art.rs` draws the pixel art, `src/sound.rs` synthesizes PCM audio, and `src/main.rs` handles the window, keyboard, and fixed-step loop. `src/browser.rs` and `web/` provide the thin browser integration; the native build does not use them. `server/src/main.rs` provides the HTTP server and its request tests. The workspace defaults to the game, so `cargo run --release` continues to launch it.
 # dario
