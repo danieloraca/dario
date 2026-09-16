@@ -23,6 +23,21 @@ open target/Dario.app
 
 This creates a locally signed app in `target/Dario.app`. It is intended for this Mac; it is not a notarized distribution build.
 
+## Play in a browser
+
+The browser version runs the same Rust game, compiled to WebAssembly, including all music and effects. Install the target once, then start the local server (Python 3 is required):
+
+```sh
+rustup target add wasm32-unknown-unknown
+sh scripts/serve-web.sh
+```
+
+Open [Dario in your browser](http://127.0.0.1:8080) and press Enter. To use another port, run `sh scripts/serve-web.sh 8081`. Stop the server with Ctrl+C. Rerun the command after editing Rust or web files to rebuild; there is no hot reload.
+
+A keyboard is required. The controls below also work in the browser; **Q returns to the title screen** there. Audio unlocks on your first keypress or click. Leaving the tab pauses the game and silences its audio; press P to resume. Fullscreen uses the browser's permission rules.
+
+For static hosting, run `sh scripts/build-web.sh` and publish the contents of `target/web/`. Serve `.wasm` as `application/wasm` over HTTP(S), rather than opening the HTML as a local file. The build assembles the graphics and audio JavaScript runtime from the versions of Miniquad and quad-snd in `Cargo.lock`, so it uses no CDN or third-party requests. This also avoids an unused plugin error in Macroquad 0.4.16's prebuilt JavaScript bundle. See [Macroquad's WebAssembly documentation](https://github.com/not-fl3/macroquad#wasm).
+
 | Key | Action |
 | --- | --- |
 | Arrow keys / A, D | Move |
@@ -45,7 +60,7 @@ Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through
 - An original 16-bar chiptune with pulse-wave melody, triangle bass, arpeggios, and synthesized noise drums. Seven synthesized effects cover jumping, coins, bumps, stomps, damage, checkpoints, and finishes.
 - All sprites, music, and sound effects are generated in Rust. No Nintendo artwork, recordings, or music are included.
 
-Built with [Macroquad](https://macroquad.rs/); graphics and audio use its [official APIs](https://docs.rs/macroquad/0.4.16/macroquad/). The game is a native desktop executable. macOS is the verified development platform. Linux builds require development packages for ALSA, X11, and OpenGL (on Debian/Ubuntu: `libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev`).
+Built with [Macroquad](https://macroquad.rs/); graphics and audio use its [official APIs](https://docs.rs/macroquad/0.4.16/macroquad/). The game builds for native desktop and WebAssembly. macOS is the verified native development platform. Linux builds require development packages for ALSA, X11, and OpenGL (on Debian/Ubuntu: `libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev`).
 
 ## Development
 
@@ -63,5 +78,5 @@ cargo run -- --mute           # Start quietly
 cargo run -- --export-music   # Save dario-theme.wav without opening a window
 ```
 
-`src/world.rs` contains simulation and gameplay tests, `src/art.rs` draws the pixel art, `src/sound.rs` synthesizes PCM audio, and `src/main.rs` handles the window, keyboard, and fixed-step loop.
+`src/world.rs` contains simulation and gameplay tests, `src/art.rs` draws the pixel art, `src/sound.rs` synthesizes PCM audio, and `src/main.rs` handles the window, keyboard, and fixed-step loop. `src/browser.rs` and `web/` provide the thin browser integration; the native build does not use them.
 # dario

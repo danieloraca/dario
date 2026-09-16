@@ -1,0 +1,756 @@
+use macroquad::prelude::*;
+
+use crate::world::{Game, HEIGHT, Phase, TILE, Tile, WIDTH};
+
+const INK: Color = color_u8!(32, 53, 55, 255);
+const CREAM: Color = color_u8!(255, 246, 211, 255);
+const GOLD: Color = color_u8!(255, 202, 79, 255);
+const ORANGE: Color = color_u8!(230, 122, 58, 255);
+const RED: Color = color_u8!(194, 71, 52, 255);
+
+pub fn icon() -> macroquad::miniquad::conf::Icon {
+    fn pixels<const N: usize>(side: usize) -> [u8; N] {
+        let mut bytes = [0; N];
+        for y in 0..side {
+            for x in 0..side {
+                let px = x * 16 / side;
+                let py = y * 16 / side;
+                let letter = (3..13).contains(&px)
+                    && (1..15).contains(&py)
+                    && glyph('D')[(py - 1) / 2] & (1 << (4 - (px - 3) / 2)) != 0;
+                let color = if letter { GOLD } else { INK };
+                let offset = (y * side + x) * 4;
+                bytes[offset..offset + 4].copy_from_slice(&[
+                    (color.r * 255.0) as u8,
+                    (color.g * 255.0) as u8,
+                    (color.b * 255.0) as u8,
+                    255,
+                ]);
+            }
+        }
+        bytes
+    }
+    macroquad::miniquad::conf::Icon {
+        small: pixels(16),
+        medium: pixels(32),
+        big: pixels(64),
+    }
+}
+
+fn rect(x: f32, y: f32, w: f32, h: f32, color: Color) {
+    draw_rectangle(x.round(), y.round(), w, h, color);
+}
+
+fn glyph(c: char) -> [u8; 7] {
+    match c {
+        'A' => [14, 17, 17, 31, 17, 17, 17],
+        'B' => [30, 17, 17, 30, 17, 17, 30],
+        'C' => [14, 17, 16, 16, 16, 17, 14],
+        'D' => [30, 17, 17, 17, 17, 17, 30],
+        'E' => [31, 16, 16, 30, 16, 16, 31],
+        'F' => [31, 16, 16, 30, 16, 16, 16],
+        'G' => [14, 17, 16, 23, 17, 17, 15],
+        'H' => [17, 17, 17, 31, 17, 17, 17],
+        'I' => [31, 4, 4, 4, 4, 4, 31],
+        'J' => [7, 2, 2, 2, 18, 18, 12],
+        'K' => [17, 18, 20, 24, 20, 18, 17],
+        'L' => [16, 16, 16, 16, 16, 16, 31],
+        'M' => [17, 27, 21, 21, 17, 17, 17],
+        'N' => [17, 25, 25, 21, 19, 19, 17],
+        'O' => [14, 17, 17, 17, 17, 17, 14],
+        'P' => [30, 17, 17, 30, 16, 16, 16],
+        'Q' => [14, 17, 17, 17, 21, 18, 13],
+        'R' => [30, 17, 17, 30, 20, 18, 17],
+        'S' => [15, 16, 16, 14, 1, 1, 30],
+        'T' => [31, 4, 4, 4, 4, 4, 4],
+        'U' => [17, 17, 17, 17, 17, 17, 14],
+        'V' => [17, 17, 17, 17, 17, 10, 4],
+        'W' => [17, 17, 17, 21, 21, 21, 10],
+        'X' => [17, 17, 10, 4, 10, 17, 17],
+        'Y' => [17, 17, 10, 4, 4, 4, 4],
+        'Z' => [31, 1, 2, 4, 8, 16, 31],
+        '0' => [14, 17, 19, 21, 25, 17, 14],
+        '1' => [4, 12, 4, 4, 4, 4, 14],
+        '2' => [14, 17, 1, 2, 4, 8, 31],
+        '3' => [30, 1, 1, 14, 1, 1, 30],
+        '4' => [2, 6, 10, 18, 31, 2, 2],
+        '5' => [31, 16, 16, 30, 1, 1, 30],
+        '6' => [14, 16, 16, 30, 17, 17, 14],
+        '7' => [31, 1, 2, 4, 8, 8, 8],
+        '8' => [14, 17, 17, 14, 17, 17, 14],
+        '9' => [14, 17, 17, 15, 1, 1, 14],
+        '!' => [4, 4, 4, 4, 4, 0, 4],
+        '?' => [14, 17, 1, 2, 4, 0, 4],
+        '-' => [0, 0, 0, 31, 0, 0, 0],
+        '+' => [0, 4, 4, 31, 4, 4, 0],
+        '/' => [1, 2, 2, 4, 8, 8, 16],
+        ':' => [0, 4, 4, 0, 4, 4, 0],
+        '.' => [0, 0, 0, 0, 0, 12, 12],
+        '>' => [16, 8, 4, 2, 4, 8, 16],
+        '<' => [1, 2, 4, 8, 4, 2, 1],
+        _ => [0; 7],
+    }
+}
+
+pub fn text(label: &str, x: f32, y: f32, size: f32, color: Color) {
+    for (i, c) in label.chars().enumerate() {
+        for (row, bits) in glyph(c.to_ascii_uppercase()).iter().enumerate() {
+            for col in 0..5 {
+                if bits & (1 << (4 - col)) != 0 {
+                    rect(
+                        x + (i as f32 * 6.0 + col as f32) * size,
+                        y + row as f32 * size,
+                        size,
+                        size,
+                        color,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn centered(label: &str, y: f32, size: f32, color: Color) {
+    let width = (label.len() as f32 * 6.0 - 1.0) * size;
+    text(label, (WIDTH - width) / 2.0, y, size, color);
+}
+
+fn cloud(x: f32, y: f32, size: f32, color: Color) {
+    rect(x + 7.0 * size, y, 17.0 * size, 4.0 * size, color);
+    rect(
+        x + 3.0 * size,
+        y + 4.0 * size,
+        29.0 * size,
+        5.0 * size,
+        color,
+    );
+    rect(x, y + 9.0 * size, 37.0 * size, 6.0 * size, color);
+    rect(
+        x + 4.0 * size,
+        y + 15.0 * size,
+        29.0 * size,
+        2.0 * size,
+        color,
+    );
+}
+
+fn hill(x: f32, base: f32, radius: f32, height: f32, color: Color) {
+    for step in 0..(height as i32 / 4) {
+        let rise = step as f32 * 4.0;
+        let half_width = radius * (1.0 - (rise / height).powi(2)).sqrt();
+        rect(
+            x - half_width,
+            base - rise,
+            (half_width * 2.0 / 4.0).ceil() * 4.0,
+            4.0,
+            color,
+        );
+    }
+}
+
+fn background(game: &Game) {
+    let (sky, horizon, far, near, sun) = match game.stage {
+        0 => (
+            color_u8!(112, 190, 186, 255),
+            color_u8!(194, 223, 177, 255),
+            color_u8!(129, 180, 132, 255),
+            color_u8!(73, 135, 98, 255),
+            color_u8!(255, 225, 148, 255),
+        ),
+        1 => (
+            color_u8!(215, 151, 112, 255),
+            color_u8!(249, 208, 137, 255),
+            color_u8!(175, 169, 111, 255),
+            color_u8!(105, 135, 91, 255),
+            color_u8!(255, 237, 168, 255),
+        ),
+        _ => (
+            color_u8!(94, 105, 147, 255),
+            color_u8!(213, 155, 154, 255),
+            color_u8!(133, 130, 151, 255),
+            color_u8!(76, 105, 117, 255),
+            color_u8!(255, 202, 159, 255),
+        ),
+    };
+    clear_background(sky);
+    for row in 0..24 {
+        let blend = row as f32 / 23.0;
+        let color = Color::new(
+            sky.r + (horizon.r - sky.r) * blend,
+            sky.g + (horizon.g - sky.g) * blend,
+            sky.b + (horizon.b - sky.b) * blend,
+            1.0,
+        );
+        rect(0.0, 32.0 + row as f32 * 7.0, WIDTH, 7.0, color);
+    }
+    let sun_x = 309.0 - game.camera * 0.025;
+    for y in -19_i32..20 {
+        let half = (20.0_f32.powi(2) - (y as f32).powi(2)).sqrt();
+        rect(
+            sun_x - half,
+            69.0 + y as f32,
+            (half * 2.0).floor(),
+            1.0,
+            sun,
+        );
+    }
+    for i in -1_i32..7 {
+        let x = (i as f32 * 113.0 - game.camera * 0.12 - game.time * 1.2).rem_euclid(760.0) - 80.0;
+        cloud(
+            x,
+            46.0 + (i * 37).rem_euclid(43) as f32,
+            if i % 2 == 0 { 1.0 } else { 0.75 },
+            Color::new(CREAM.r, CREAM.g, CREAM.b, 0.64),
+        );
+    }
+    for i in -1_i32..6 {
+        let x = i as f32 * 155.0 - (game.camera * 0.22).rem_euclid(155.0);
+        hill(
+            x + 55.0,
+            194.0,
+            94.0,
+            60.0 + (i * 13).rem_euclid(25) as f32,
+            far,
+        );
+    }
+    for i in -1_i32..7 {
+        let x = i as f32 * 105.0 - (game.camera * 0.43).rem_euclid(105.0);
+        hill(
+            x + 30.0,
+            197.0,
+            68.0,
+            28.0 + (i * 19).rem_euclid(20) as f32,
+            near,
+        );
+        rect(
+            x + 19.0,
+            169.0,
+            2.0,
+            5.0,
+            Color::new(near.r * 0.83, near.g * 0.83, near.b * 0.83, 1.0),
+        );
+        rect(
+            x + 28.0,
+            169.0,
+            2.0,
+            5.0,
+            Color::new(near.r * 0.83, near.g * 0.83, near.b * 0.83, 1.0),
+        );
+    }
+    if game.stage == 2 {
+        for i in 0..16 {
+            let x = (i * 73 + 27) % 384;
+            let y = 36 + (i * 31) % 70;
+            rect(x as f32, y as f32, 1.0, 2.0, CREAM);
+        }
+    }
+}
+
+fn tile(game: &Game, kind: Tile, tx: i32, ty: i32, x: f32, y: f32) {
+    match kind {
+        Tile::Air => {}
+        Tile::Ground => {
+            rect(x, y, 16.0, 16.0, color_u8!(163, 96, 62, 255));
+            rect(x + 1.0, y + 1.0, 14.0, 14.0, color_u8!(180, 112, 70, 255));
+            if game.level.tile(tx, ty - 1) == Tile::Air {
+                rect(x, y, 16.0, 3.0, color_u8!(205, 217, 113, 255));
+                rect(x, y + 3.0, 16.0, 4.0, color_u8!(102, 151, 73, 255));
+                rect(x + 2.0, y + 6.0, 3.0, 2.0, color_u8!(102, 151, 73, 255));
+                rect(x + 11.0, y + 6.0, 2.0, 3.0, color_u8!(102, 151, 73, 255));
+            }
+            let shift = (tx * 7 + ty * 3).rem_euclid(9) as f32;
+            rect(
+                x + 2.0 + shift,
+                y + 10.0,
+                3.0,
+                2.0,
+                color_u8!(213, 144, 85, 255),
+            );
+            rect(
+                x + 10.0 - shift / 2.0,
+                y + 13.0,
+                2.0,
+                1.0,
+                color_u8!(128, 81, 58, 255),
+            );
+        }
+        Tile::Brick => {
+            rect(x, y, 16.0, 16.0, color_u8!(108, 67, 47, 255));
+            rect(x + 1.0, y + 1.0, 14.0, 6.0, ORANGE);
+            rect(x + 1.0, y + 9.0, 14.0, 6.0, color_u8!(202, 104, 56, 255));
+            rect(x + 1.0, y + 1.0, 14.0, 1.0, color_u8!(248, 176, 92, 255));
+            rect(x + 7.0, y, 1.0, 8.0, color_u8!(108, 67, 47, 255));
+            rect(x + 3.0, y + 8.0, 1.0, 8.0, color_u8!(108, 67, 47, 255));
+            rect(x + 12.0, y + 8.0, 1.0, 8.0, color_u8!(108, 67, 47, 255));
+        }
+        Tile::Question | Tile::Used => {
+            let used = kind == Tile::Used;
+            rect(
+                x,
+                y,
+                16.0,
+                16.0,
+                if used {
+                    color_u8!(109, 83, 55, 255)
+                } else {
+                    color_u8!(159, 98, 38, 255)
+                },
+            );
+            rect(
+                x + 1.0,
+                y + 1.0,
+                14.0,
+                13.0,
+                if used {
+                    color_u8!(157, 125, 80, 255)
+                } else {
+                    GOLD
+                },
+            );
+            rect(
+                x + 2.0,
+                y + 1.0,
+                12.0,
+                1.0,
+                if used {
+                    color_u8!(187, 151, 99, 255)
+                } else {
+                    CREAM
+                },
+            );
+            for (dx, dy) in [(2.0, 3.0), (13.0, 3.0), (2.0, 12.0), (13.0, 12.0)] {
+                rect(x + dx, y + dy, 1.0, 1.0, color_u8!(159, 98, 38, 255));
+            }
+            if !used {
+                text("?", x + 6.0, y + 5.0, 1.0, ORANGE);
+                text("?", x + 5.0, y + 4.0, 1.0, CREAM);
+            }
+        }
+        Tile::PipeLeft | Tile::PipeRight => {
+            let left = kind == Tile::PipeLeft;
+            let origin = x - if left { 0.0 } else { 16.0 };
+            if left {
+                rect(origin + 2.0, y, 28.0, 16.0, color_u8!(41, 88, 70, 255));
+                rect(origin + 4.0, y, 24.0, 16.0, color_u8!(66, 130, 84, 255));
+                rect(origin + 6.0, y, 6.0, 16.0, color_u8!(141, 183, 99, 255));
+                rect(origin + 7.0, y, 2.0, 16.0, color_u8!(196, 214, 129, 255));
+                rect(origin + 23.0, y, 4.0, 16.0, color_u8!(49, 108, 77, 255));
+                if game.level.tile(tx, ty - 1) != Tile::PipeLeft {
+                    rect(origin, y, 32.0, 7.0, color_u8!(41, 88, 70, 255));
+                    rect(
+                        origin + 1.0,
+                        y + 1.0,
+                        30.0,
+                        4.0,
+                        color_u8!(111, 164, 94, 255),
+                    );
+                    rect(
+                        origin + 2.0,
+                        y + 1.0,
+                        27.0,
+                        1.0,
+                        color_u8!(207, 223, 143, 255),
+                    );
+                    rect(
+                        origin + 3.0,
+                        y + 2.0,
+                        7.0,
+                        3.0,
+                        color_u8!(169, 199, 119, 255),
+                    );
+                }
+            }
+        }
+        Tile::Stone => {
+            rect(x, y, 16.0, 16.0, color_u8!(110, 107, 81, 255));
+            rect(x + 1.0, y + 1.0, 13.0, 13.0, color_u8!(181, 174, 125, 255));
+            rect(x + 2.0, y + 1.0, 12.0, 2.0, color_u8!(219, 211, 155, 255));
+            rect(x + 3.0, y + 5.0, 8.0, 6.0, color_u8!(161, 157, 110, 255));
+        }
+    }
+}
+
+fn coin(x: f32, y: f32, time: f32) {
+    let width = [7.0, 5.0, 2.0, 5.0][(time * 7.0) as usize % 4];
+    let x = x + (8.0 - width) / 2.0;
+    rect(x, y + 2.0, width, 7.0, color_u8!(174, 115, 43, 255));
+    rect(x + 1.0, y, (width - 2.0).max(1.0), 11.0, GOLD);
+    rect(x, y + 2.0, width, 6.0, GOLD);
+    rect(x + 1.0, y + 2.0, 1.0, 5.0, CREAM);
+    if width > 4.0 {
+        rect(x + width - 2.0, y + 3.0, 1.0, 5.0, ORANGE);
+    }
+}
+
+fn sprite(rows: &[&str], x: f32, y: f32, facing: f32) {
+    for (dy, row) in rows.iter().enumerate() {
+        for (dx, pixel) in row.chars().enumerate() {
+            let color = match pixel {
+                'o' => INK,
+                'r' => RED,
+                'h' => ORANGE,
+                's' => color_u8!(239, 174, 115, 255),
+                'c' => CREAM,
+                'b' => color_u8!(45, 98, 110, 255),
+                't' => color_u8!(89, 152, 157, 255),
+                'y' => GOLD,
+                _ => continue,
+            };
+            let px = if facing >= 0.0 {
+                dx
+            } else {
+                row.len() - 1 - dx
+            };
+            rect(x + px as f32, y + dy as f32, 1.0, 1.0, color);
+        }
+    }
+}
+
+fn player(game: &Game) {
+    let p = &game.player;
+    if p.invulnerable > 0.0 && (game.time * 12.0) as i32 % 2 == 0 {
+        return;
+    }
+    let x = (p.pos.x - game.camera - 2.0).round();
+    let y = (p.pos.y - 1.0).round();
+    sprite(
+        &[
+            ".....oooooo.....",
+            "....orhhhhrro...",
+            "....orrryrrro...",
+            "...orrrrrrrrro..",
+            "...ooosssosoo...",
+            "....oscccosso...",
+            "....ossssoosso..",
+            ".....ossssso....",
+            "....orrrrro.....",
+            "...orbrrbrrso...",
+            "..ossbttbrosso..",
+            "..osobyybooso...",
+            ".....bbbbbo.....",
+            ".....btbbbo.....",
+        ],
+        x,
+        y,
+        p.facing,
+    );
+    let airborne = game.phase != Phase::Title && (!p.grounded || game.phase == Phase::Dying);
+    let walking = p.vel.x.abs() > 5.0 && (p.stride / 9.0) as i32 % 2 == 0;
+    let legs: &[&str] = if airborne {
+        &["....obboobbo....", "...obbo..oboo...", "...ooo....ooo..."]
+    } else if walking {
+        &["....obbo.obbo...", "...obbo...obbo..", "...oooo...oooo.."]
+    } else {
+        &[".....obobbo.....", ".....obobbo.....", "....ooo.oooo...."]
+    };
+    sprite(legs, x, y + 14.0, p.facing);
+}
+
+fn scenery(game: &Game) {
+    let camera = game.camera;
+    let start = (camera / TILE) as i32 - 1;
+    let end = start + 27;
+    for tx in start..end {
+        if game.level.tile(tx, 12) == Tile::Ground {
+            let x = tx as f32 * TILE - camera;
+            if tx.rem_euclid(11) == 5 {
+                rect(x + 8.0, 184.0, 1.0, 8.0, color_u8!(64, 111, 69, 255));
+                rect(x + 5.0, 184.0, 7.0, 2.0, CREAM);
+                rect(x + 7.0, 182.0, 3.0, 6.0, CREAM);
+                rect(x + 7.0, 184.0, 3.0, 2.0, GOLD);
+            }
+            if tx.rem_euclid(7) == 2 {
+                rect(x + 4.0, 189.0, 1.0, 3.0, color_u8!(59, 117, 72, 255));
+                rect(x + 6.0, 187.0, 1.0, 5.0, color_u8!(59, 117, 72, 255));
+                rect(x + 8.0, 189.0, 1.0, 3.0, color_u8!(59, 117, 72, 255));
+            }
+        }
+    }
+    // A small trail marker introduces the direction of travel.
+    if camera < 160.0 {
+        let x = 101.0 - camera;
+        rect(x + 8.0, 174.0, 3.0, 18.0, color_u8!(120, 83, 56, 255));
+        rect(x, 168.0, 24.0, 12.0, color_u8!(120, 83, 56, 255));
+        rect(x + 1.0, 169.0, 22.0, 9.0, color_u8!(226, 178, 110, 255));
+        text(">", x + 10.0, 170.0, 1.0, INK);
+    }
+    let cp = game.level.checkpoint.x - camera;
+    rect(cp + 3.0, 155.0, 2.0, 37.0, INK);
+    rect(
+        cp + 5.0,
+        156.0,
+        15.0,
+        11.0,
+        if game.checkpoint { GOLD } else { CREAM },
+    );
+    text(
+        "+",
+        cp + 9.0,
+        158.0,
+        1.0,
+        if game.checkpoint {
+            RED
+        } else {
+            color_u8!(105, 150, 113, 255)
+        },
+    );
+    let flag = game.level.goal - camera;
+    rect(flag + 3.0, 91.0, 3.0, 101.0, INK);
+    rect(flag + 3.0, 92.0, 1.0, 100.0, CREAM);
+    rect(flag + 1.0, 87.0, 7.0, 6.0, GOLD);
+    let flutter = (game.time * 6.0).sin().round();
+    rect(flag + 6.0, 96.0, 22.0, 13.0, RED);
+    rect(flag + 19.0, 96.0 + flutter, 13.0, 13.0, RED);
+    sprite(
+        &["..c..", ".ccc.", "ccccc", ".ccc.", "..c.."],
+        flag + 13.0,
+        100.0,
+        1.0,
+    );
+    let house = flag + 57.0;
+    rect(house, 151.0, 51.0, 41.0, color_u8!(228, 197, 140, 255));
+    for i in 0..7 {
+        rect(
+            house - 5.0 + i as f32 * 4.0,
+            150.0 - i as f32 * 3.0,
+            61.0 - i as f32 * 8.0,
+            4.0,
+            RED,
+        );
+    }
+    rect(house + 19.0, 168.0, 14.0, 24.0, INK);
+    rect(house + 20.0, 169.0, 12.0, 22.0, color_u8!(85, 108, 88, 255));
+    rect(house + 29.0, 181.0, 2.0, 2.0, GOLD);
+    for dx in [5.0, 38.0] {
+        rect(house + dx, 160.0, 9.0, 11.0, INK);
+        rect(house + dx + 1.0, 161.0, 7.0, 9.0, GOLD);
+        rect(house + dx + 4.0, 161.0, 1.0, 9.0, INK);
+        rect(house + dx + 1.0, 165.0, 7.0, 1.0, INK);
+    }
+}
+
+fn heart(x: f32, y: f32, full: bool) {
+    let color = if full {
+        color_u8!(246, 142, 111, 255)
+    } else {
+        color_u8!(79, 98, 89, 255)
+    };
+    for (row, bits) in [54_u8, 127, 127, 127, 62, 28, 8].iter().enumerate() {
+        for col in 0..7 {
+            if bits & (1 << (6 - col)) != 0 {
+                rect(x + col as f32, y + row as f32, 1.0, 1.0, color);
+            }
+        }
+    }
+}
+
+fn hud(game: &Game, muted: bool) {
+    rect(0.0, 0.0, WIDTH, 31.0, INK);
+    rect(0.0, 30.0, WIDTH, 1.0, color_u8!(66, 91, 78, 255));
+    text("DARIO", 12.0, 7.0, 1.0, CREAM);
+    for i in 0..3 {
+        heart(12.0 + i as f32 * 11.0, 18.0, i < game.lives);
+    }
+    coin(88.0, 11.0, 0.0);
+    text(&format!("{:02}", game.coins), 101.0, 13.0, 1.0, GOLD);
+    text("SCORE", 148.0, 6.0, 1.0, color_u8!(156, 184, 160, 255));
+    text(&format!("{:06}", game.score), 148.0, 18.0, 1.0, CREAM);
+    text("WORLD", 217.0, 6.0, 1.0, color_u8!(156, 184, 160, 255));
+    text(&format!("1-{}", game.stage + 1), 223.0, 18.0, 1.0, CREAM);
+    text(
+        if muted { "M / OFF" } else { "M / ON" },
+        280.0,
+        13.0,
+        1.0,
+        CREAM,
+    );
+    text("II", 354.0, 13.0, 1.0, CREAM);
+    rect(0.0, 232.0, WIDTH, 8.0, INK);
+    let progress = (game.player.pos.x / game.level.goal).clamp(0.0, 1.0);
+    rect(12.0, 235.0, 360.0, 2.0, color_u8!(76, 101, 81, 255));
+    rect(12.0, 235.0, (360.0 * progress).max(2.0), 2.0, GOLD);
+    if game.banner_time > 0.0 && game.phase == Phase::Playing {
+        let label = if game.checkpoint {
+            "CHECKPOINT!"
+        } else {
+            game.level.name
+        };
+        let width = label.len() as f32 * 6.0 + 20.0;
+        rect((WIDTH - width) / 2.0, 43.0, width, 19.0, INK);
+        centered(label, 49.0, 1.0, CREAM);
+    }
+}
+
+fn title(game: &Game, muted: bool) {
+    text("DARIO / 01", 13.0, 12.0, 1.0, INK);
+    text("A RUST ORIGINAL", 282.0, 12.0, 1.0, INK);
+    centered("SMALL GAME. BIG LITTLE ADVENTURE.", 38.0, 1.0, INK);
+    // Chunky, offset lettering is drawn with the same hand-made bitmap alphabet.
+    let x = (WIDTH - 29.0 * 7.0) / 2.0;
+    for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 7.0), (3.0, 5.0)] {
+        text("DARIO", x + dx, 57.0 + dy, 7.0, INK);
+    }
+    text("DARIO", x, 61.0, 7.0, RED);
+    text("DARIO", x, 57.0, 7.0, GOLD);
+    centered("A LITTLE RUST. A LOT OF JUMP.", 119.0, 1.0, INK);
+    rect(111.0, 137.0, 164.0, 23.0, color_u8!(43, 80, 67, 255));
+    rect(109.0, 134.0, 164.0, 23.0, INK);
+    rect(110.0, 135.0, 162.0, 1.0, color_u8!(101, 136, 103, 255));
+    centered("PRESS ENTER TO PLAY", 142.0, 1.0, CREAM);
+    if (game.time * 2.0) as i32 % 2 == 0 {
+        text(">", 117.0, 142.0, 1.0, GOLD);
+    }
+    rect(0.0, 202.0, WIDTH, 38.0, INK);
+    rect(0.0, 201.0, WIDTH, 1.0, color_u8!(94, 129, 94, 255));
+    centered("ARROWS / A D  MOVE     SPACE / Z  JUMP", 210.0, 1.0, CREAM);
+    centered(
+        if muted {
+            "SHIFT  RUN    M  SOUND OFF    F  FULLSCREEN"
+        } else {
+            "SHIFT  RUN    M  SOUND ON     F  FULLSCREEN"
+        },
+        224.0,
+        1.0,
+        color_u8!(166, 189, 156, 255),
+    );
+}
+
+fn panel(title: &str, subtitle: &str, action: &str, game: &Game) {
+    rect(
+        0.0,
+        31.0,
+        WIDTH,
+        HEIGHT - 31.0,
+        Color::new(0.06, 0.12, 0.13, 0.62),
+    );
+    rect(47.0, 66.0, 294.0, 120.0, Color::new(0.04, 0.08, 0.08, 0.4));
+    rect(44.0, 62.0, 294.0, 120.0, INK);
+    rect(45.0, 63.0, 292.0, 1.0, color_u8!(136, 161, 124, 255));
+    centered(title, 82.0, 2.0, GOLD);
+    centered(subtitle, 110.0, 1.0, CREAM);
+    if matches!(game.phase, Phase::Won | Phase::GameOver) {
+        centered(
+            &format!("{:02} COINS    {:06} POINTS", game.coins, game.score),
+            130.0,
+            1.0,
+            color_u8!(166, 189, 156, 255),
+        );
+    }
+    centered(action, 157.0, 1.0, CREAM);
+}
+
+pub fn draw(game: &Game, muted: bool) {
+    background(game);
+    scenery(game);
+    let start = (game.camera / TILE).floor() as i32 - 1;
+    for y in 0..15 {
+        for x in start..start + 27 {
+            let mut py = y as f32 * TILE;
+            if let Some((bx, by, timer)) = game.bumped
+                && bx == x
+                && by == y
+            {
+                py -= (timer / 0.18 * std::f32::consts::PI).sin() * 4.0;
+            }
+            tile(
+                game,
+                game.level.tile(x, y),
+                x,
+                y,
+                x as f32 * TILE - game.camera,
+                py,
+            );
+        }
+    }
+    for c in &game.level.coins {
+        let x = c.pos.x - game.camera;
+        if !c.collected
+            && (-12.0..WIDTH).contains(&x)
+            && (game.phase != Phase::Title || c.pos.y > 160.0)
+        {
+            coin(
+                x,
+                c.pos.y + (game.time * 4.0 + c.pos.x * 0.05).sin(),
+                game.time + c.pos.x * 0.01,
+            );
+        }
+    }
+    for enemy in &game.level.enemies {
+        let x = enemy.pos.x - game.camera;
+        let y = enemy.pos.y;
+        if !(-16.0..WIDTH).contains(&x) {
+            continue;
+        }
+        if enemy.squished.is_some() {
+            rect(x, y + 9.0, 14.0, 3.0, RED);
+            rect(x + 2.0, y + 9.0, 10.0, 1.0, ORANGE);
+        } else {
+            sprite(
+                &[
+                    "....oooooo....",
+                    "..oorhhhhroo..",
+                    ".orhhhyhhhhhro",
+                    ".orhhyhhhyhro.",
+                    "orhhhyhhhhyhro",
+                    "orrrrrrrrrrro.",
+                    "oococrrcocoo..",
+                    ".ococrrcoco...",
+                    "..ossssssso...",
+                    "...oooooo.....",
+                ],
+                x,
+                y,
+                enemy.vel.x.signum(),
+            );
+            let step = ((game.time * 7.0) as i32 % 2) as f32;
+            rect(x + 1.0 + step, y + 10.0, 4.0, 2.0, INK);
+            rect(x + 9.0 - step, y + 10.0, 4.0, 2.0, INK);
+        }
+    }
+    player(game);
+    for p in &game.particles {
+        rect(
+            p.pos.x - game.camera,
+            p.pos.y,
+            2.0,
+            2.0,
+            if p.gold { GOLD } else { CREAM },
+        );
+    }
+    if game.phase == Phase::Title {
+        title(game, muted);
+    } else {
+        hud(game, muted);
+        match game.phase {
+            Phase::Paused => panel(
+                "TAKE A BREATHER",
+                "YOUR ADVENTURE CAN WAIT.",
+                "ESC / P  RESUME     R  RESTART",
+                game,
+            ),
+            Phase::GameOver => panel(
+                "ONE MORE TRY?",
+                "EVERY GREAT JUMP STARTS SOMEWHERE.",
+                "ENTER  PLAY AGAIN",
+                game,
+            ),
+            Phase::Won => panel(
+                "YOU DID IT!",
+                "THREE WORLDS. ONE LITTLE LEGEND.",
+                "ENTER  PLAY AGAIN",
+                game,
+            ),
+            Phase::StageClear => panel(
+                "NICE RUN!",
+                game.level.name,
+                if game.stage == 2 {
+                    "HOME, SWEET HOME."
+                } else {
+                    "ON TO THE NEXT ADVENTURE..."
+                },
+                game,
+            ),
+            _ => {}
+        }
+    }
+}

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#203537">
+    <meta name="description" content="A little Rust. A lot of jump. Play Dario, a tiny pixel platformer with an original chiptune soundtrack.">
+    <title>Dario — A little Rust. A lot of jump.</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="game.css">
+    <script src="vendor/mq_js_bundle.js" defer></script>
+    <script src="game.js" defer></script>
+  </head>
+  <body>
+    <canvas id="glcanvas" tabindex="0" aria-label="Dario platform game" aria-describedby="controls" data-state="loading">
+      Dario needs a browser with WebAssembly and WebGL support.
+    </canvas>
+    <p id="controls" class="screen-reader-only">Keyboard controls: Enter starts the game. Arrow keys or A and D move. Hold Space, Z, Up, or W to jump higher. Hold Shift or X to run. Escape or P pauses. M toggles sound. F toggles fullscreen. R restarts. Q returns to the title. The game pauses when you leave this tab. A keyboard is required.</p>
+    <div id="loading" role="status" aria-live="polite">
+      <h1>DARIO</h1>
+      <p id="loading-message">Warming up the pixels...</p>
+      <a id="retry" href="./" hidden>Try again</a>
+    </div>
+    <noscript><p class="no-script">Enable JavaScript to play Dario.</p></noscript>
+  </body>
+</html>
