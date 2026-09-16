@@ -20,7 +20,7 @@ if [ ! -d "$task_project" ]; then
     echo "Create $task_project as $task_user before installing." >&2
     exit 1
 fi
-for task_file in index.html game.js game.css favicon.svg dario.wasm vendor/mq_js_bundle.js; do
+for task_file in index.html game.js saves.js game.css favicon.svg dario.wasm vendor/mq_js_bundle.js; do
     test -r "$task_source/target/web/$task_file"
 done
 test -r "$task_source/deploy/dario.service"

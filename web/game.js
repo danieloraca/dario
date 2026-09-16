@@ -21,9 +21,7 @@
     fail("The game could not load. Check your connection and use a browser with WebAssembly support.");
     return;
   }
-  const loadingTimeout = setTimeout(() => {
-    if (!ready) fail("The game is taking too long to start. Reload the page and check that WebGL is available.");
-  }, 20000);
+  let loadingTimeout;
   window.addEventListener("error", () => {
     clearTimeout(loadingTimeout);
     fail("Something stopped the game. Reload the page to try again.");
@@ -39,7 +37,10 @@
         loading.hidden = true;
         Object.assign(gameCanvas.dataset, { state: phases[phase], world, coins, lives, muted: Boolean(muted) });
         gameCanvas.setAttribute("aria-label", `Dario: ${phases[phase]}. World 1-${world}, ${coins} coins, ${lives} lives. Sound ${muted ? "off" : "on"}.`);
+        DarioSaves.phase(phases[phase]);
       };
+      imports.env.dario_load_progress = DarioSaves.read;
+      imports.env.dario_save_progress = DarioSaves.write;
       imports.env.dario_take_pause_request = () => {
         const requested = pauseRequested;
         pauseRequested = false;
@@ -64,14 +65,28 @@
     if (document.hidden) pause();
   });
   gameCanvas.addEventListener("pointerdown", () => gameCanvas.focus());
+  // Miniquad handles Tab on the canvas; let keyboard users reach the profile UI.
+  gameCanvas.addEventListener("keydown", event => {
+    const changePlayer = document.getElementById("change-player");
+    if (event.code === "Tab" && !changePlayer.disabled) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      changePlayer.focus();
+    }
+  }, { capture: true });
   gameCanvas.addEventListener("keydown", (event) => {
     if (event.code === "KeyF" && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
-      const operation = document.fullscreenElement ? document.exitFullscreen() : gameCanvas.requestFullscreen?.();
+      const operation = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
       operation?.catch(() => { /* Embedded pages may not grant fullscreen permission. */ });
     }
   });
 
   // Both runtime and WASM are served locally from the locked Cargo dependencies.
-  load("dario.wasm");
+  DarioSaves.prepare(() => {
+    loadingTimeout = setTimeout(() => {
+      if (!ready) fail("The game is taking too long to start. Reload the page and check that WebGL is available.");
+    }, 20000);
+    load("dario.wasm");
+  });
 })();

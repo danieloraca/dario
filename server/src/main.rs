@@ -7,6 +7,7 @@ const ASSETS: &[(&str, &str)] = &[
     ("index.html", "text/html; charset=utf-8"),
     ("dario.wasm", "application/wasm"),
     ("game.js", "text/javascript; charset=utf-8"),
+    ("saves.js", "text/javascript; charset=utf-8"),
     ("game.css", "text/css; charset=utf-8"),
     ("favicon.svg", "image/svg+xml"),
     ("vendor/mq_js_bundle.js", "text/javascript; charset=utf-8"),

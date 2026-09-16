@@ -80,6 +80,8 @@ Campaign clears unlock the next level permanently. Enter continues at the latest
 
 Desktop progress and sound preferences save automatically to a versioned JSON file: `~/Library/Application Support/Dario/progress.json` on macOS, `%APPDATA%/Dario/progress.json` on Windows, or `$XDG_DATA_HOME/dario/progress.json` (default `~/.local/share/dario/progress.json`) on Linux. Set `DARIO_SAVE_PATH` to choose another file. Writes replace the previous file atomically. A damaged or unsupported save is preserved, and the game displays a guest-mode notice. Smoke tests never read or write player saves.
 
+In the browser, enter a player name before playing; the browser remembers it. Use **Change player** on the title, level selection or pause screen to switch. Saving happens automatically through the server. Unsent changes are queued per tab in browser storage and retried, including after a reload. **Play as guest** works without a save service and keeps progress only for the current session.
+
 ## The little details
 
 - Three handmade stages: **Sunny Side Up**, **The Golden Hour**, and **One More Sunset**.

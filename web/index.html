@@ -9,6 +9,7 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="game.css">
     <script src="vendor/mq_js_bundle.js" defer></script>
+    <script src="saves.js" defer></script>
     <script src="game.js" defer></script>
   </head>
   <body>
@@ -25,6 +26,22 @@
       <p id="loading-message">Warming up the pixels...</p>
       <a id="retry" href="./" hidden>Try again</a>
     </div>
+    <aside id="player-toolbar" hidden>
+      <span id="save-status" role="status" aria-live="polite"></span>
+      <button id="change-player" type="button">Change player</button>
+    </aside>
+    <dialog id="profile-dialog" aria-labelledby="profile-title">
+      <form id="profile-form">
+        <p class="eyebrow">YOUR NEXT ADVENTURE</p>
+        <h2 id="profile-title">Who's playing?</h2>
+        <p>Choose a player name to save your levels, medals and records.</p>
+        <label for="player-name">Player name</label>
+        <input id="player-name" name="player" maxlength="24" required autocomplete="nickname" autocapitalize="none" spellcheck="false" placeholder="e.g. dario">
+        <p id="profile-error" role="status">Use the same name next time to continue.</p>
+        <button id="profile-play" type="submit">Load player &amp; play</button>
+        <button id="profile-guest" type="button">Play as guest</button>
+      </form>
+    </dialog>
     <noscript><p class="no-script">Enable JavaScript to play Dario.</p></noscript>
   </body>
 </html>

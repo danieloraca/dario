@@ -11,7 +11,7 @@ fi
 cargo build --release --locked --target wasm32-unknown-unknown
 mkdir -p target/web/vendor
 cp target/wasm32-unknown-unknown/release/dario.wasm target/web/dario.wasm
-cp web/index.html web/game.css web/game.js web/favicon.svg target/web/
+cp web/index.html web/game.css web/game.js web/saves.js web/favicon.svg target/web/
 
 # Assemble only the graphics and audio plugins from their locked Rust dependencies.
 # Macroquad 0.4.16's prebuilt bundle includes an unused plugin with a JS error.

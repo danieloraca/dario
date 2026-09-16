@@ -60,8 +60,16 @@ async fn run(muted: bool, smoke: bool) {
     #[cfg(not(target_arch = "wasm32"))]
     let (mut storage, progress) = storage::Storage::load(smoke);
     #[cfg(target_arch = "wasm32")]
-    let progress = dario_progress::Progress::default();
+    let (progress, browser_save_enabled) = match browser::load_progress() {
+        Ok(progress) => (progress, true),
+        Err(_) => {
+            game.save_notice = Some("SAVE UNAVAILABLE - PLAYING AS GUEST");
+            (dario_progress::Progress::default(), false)
+        }
+    };
     game.progress = progress;
+    #[cfg(target_arch = "wasm32")]
+    let mut browser_saved = game.progress.clone();
     let mut audio = sound::Audio::new(muted || game.progress.muted).await;
     let mut target = render_target(WIDTH as u32, HEIGHT as u32);
     target.texture.set_filter(FilterMode::Nearest);
@@ -199,6 +207,11 @@ async fn run(muted: bool, smoke: bool) {
         {
             storage.sync(&game.progress, get_time());
             game.save_notice = storage.notice;
+        }
+        #[cfg(target_arch = "wasm32")]
+        if browser_save_enabled && game.progress != browser_saved {
+            browser::save_progress(&game.progress);
+            browser_saved = game.progress.clone();
         }
         audio.sync_music(game.phase == Phase::Playing);
         for event in game.sounds.drain(..) {
