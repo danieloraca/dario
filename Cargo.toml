@@ -4,12 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["server"]
+members = ["server", "progress"]
 default-members = ["."]
 resolver = "3"
 
 [dependencies]
 macroquad = { version = "0.4.16", features = ["audio"] }
+dario-progress = { path = "progress" }
 
 [profile.release]
 opt-level = 3
