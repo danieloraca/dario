@@ -1,7 +1,7 @@
 use crate::entities::EnemyKind;
 use macroquad::prelude::*;
 
-use crate::world::{Game, HEIGHT, Phase, STAGE_COUNT, TILE, Tile, WIDTH};
+use crate::world::{Game, HEIGHT, Phase, STAGE_COUNT, TILE, Tile, WIDTH, time_label};
 
 const INK: Color = color_u8!(32, 53, 55, 255);
 const CREAM: Color = color_u8!(255, 246, 211, 255);
@@ -480,6 +480,20 @@ fn coin(x: f32, y: f32, time: f32) {
     }
 }
 
+fn challenge_coin(x: f32, y: f32, earned: bool) {
+    let color = if earned {
+        color_u8!(92, 222, 210, 255)
+    } else {
+        color_u8!(84, 110, 110, 255)
+    };
+    for (dy, width) in [2.0, 4.0, 6.0, 8.0, 8.0, 6.0, 4.0, 2.0].iter().enumerate() {
+        rect(x + (8.0 - width) / 2.0, y + dy as f32, *width, 1.0, color);
+    }
+    if earned {
+        rect(x + 3.0, y + 2.0, 2.0, 2.0, CREAM);
+    }
+}
+
 fn sprite(rows: &[&str], x: f32, y: f32, facing: f32) {
     for (dy, row) in rows.iter().enumerate() {
         for (dx, pixel) in row.chars().enumerate() {
@@ -649,50 +663,54 @@ fn hud(game: &Game, muted: bool, view: Vec2) {
     for i in 0..3 {
         heart(12.0 + i as f32 * 11.0, 18.0, i < game.lives);
     }
-    coin(88.0 + extra * 0.2, 11.0, 0.0);
+    let dim = color_u8!(156, 184, 160, 255);
+    text("TIME", 64.0 + extra * 0.2, 6.0, 1.0, dim);
     text(
-        &format!("{:02}", game.coins),
-        101.0 + extra * 0.2,
-        13.0,
-        1.0,
-        GOLD,
-    );
-    text(
-        "SCORE",
-        148.0 + extra * 0.4,
-        6.0,
-        1.0,
-        color_u8!(156, 184, 160, 255),
-    );
-    text(
-        &format!("{:06}", game.score),
-        148.0 + extra * 0.4,
+        &time_label(game.elapsed_ms()),
+        64.0 + extra * 0.2,
         18.0,
         1.0,
         CREAM,
     );
+    coin(129.0 + extra * 0.35, 11.0, 0.0);
     text(
-        "WORLD",
-        217.0 + extra * 0.6,
-        6.0,
+        &format!("{:02}", game.coins),
+        140.0 + extra * 0.35,
+        13.0,
         1.0,
-        color_u8!(156, 184, 160, 255),
+        GOLD,
     );
+    text("SCORE", 179.0 + extra * 0.5, 6.0, 1.0, dim);
+    text(
+        &format!("{:06}", game.score),
+        179.0 + extra * 0.5,
+        18.0,
+        1.0,
+        CREAM,
+    );
+    text("WORLD", 247.0 + extra * 0.7, 6.0, 1.0, dim);
     text(
         &crate::levels::world_label(game.stage),
-        225.0 + extra * 0.6,
+        255.0 + extra * 0.7,
         18.0,
         1.0,
         CREAM,
     );
     text(
         if muted { "M / OFF" } else { "M / ON" },
-        280.0 + extra * 0.8,
-        13.0,
+        303.0 + extra * 0.85,
+        6.0,
         1.0,
         CREAM,
     );
-    text("II", view.x - 30.0, 13.0, 1.0, CREAM);
+    for i in 0..3 {
+        challenge_coin(
+            303.0 + extra * 0.85 + i as f32 * 12.0,
+            18.0,
+            i < game.challenge_count(),
+        );
+    }
+    text("II", view.x - 18.0, 15.0, 1.0, CREAM);
     rect(0.0, view.y - 8.0, view.x, 8.0, INK);
     let progress = (game.player.pos.x / game.level.goal).clamp(0.0, 1.0);
     rect(
@@ -842,6 +860,32 @@ fn panel(title: &str, subtitle: &str, action: &str, game: &Game, view: Vec2) {
             view.x,
         );
     }
+    if game.phase == Phase::StageClear
+        && let Some(result) = &game.finish
+    {
+        centered(
+            &format!(
+                "TIME {}   SCORE {}",
+                time_label(result.millis),
+                result.score
+            ),
+            124.0 + dy,
+            1.0,
+            CREAM,
+            view.x,
+        );
+        centered(
+            &format!(
+                "CLEAR +   SPEED {}   GEMS {}",
+                if result.speed { "+" } else { "-" },
+                if result.treasure { "+" } else { "-" }
+            ),
+            139.0 + dy,
+            1.0,
+            GOLD,
+            view.x,
+        );
+    }
     centered(action, 157.0 + dy, 1.0, CREAM, view.x);
 }
 
@@ -874,11 +918,12 @@ pub fn draw_world(game: &Game, view: Vec2, camera: f32) {
             && (-12.0..view.x).contains(&x)
             && (game.phase != Phase::Title || c.pos.y > 160.0)
         {
-            coin(
-                x,
-                c.pos.y + (game.time * 4.0 + c.pos.x * 0.05).sin(),
-                game.time + c.pos.x * 0.01,
-            );
+            let y = c.pos.y + (game.time * 4.0 + c.pos.x * 0.05).sin();
+            if c.special {
+                challenge_coin(x, y, true);
+            } else {
+                coin(x, y, game.time + c.pos.x * 0.01);
+            }
         }
     }
     for platform in &game.level.platforms {
@@ -1035,7 +1080,15 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
                 view,
             ),
             Phase::StageClear => panel(
-                "NICE RUN!",
+                if game
+                    .finish
+                    .as_ref()
+                    .is_some_and(|result| result.personal_best)
+                {
+                    "NEW BEST!"
+                } else {
+                    "NICE RUN!"
+                },
                 game.level.name,
                 if game.stage + 1 == STAGE_COUNT {
                     "HOME, SWEET HOME."
@@ -1089,37 +1142,61 @@ fn level_select(game: &Game, view: Vec2) {
                 CREAM
             },
         );
-        if game.progress.levels[stage].cleared {
-            text(
-                "CLEAR",
-                x + 8.0,
-                y + 16.0,
-                1.0,
-                if stage == game.selected_stage {
-                    INK
-                } else {
-                    GOLD
-                },
-            );
+        if unlocked {
+            let record = &game.progress.levels[stage];
+            for (i, (label, earned)) in [
+                ("C", record.cleared),
+                ("S", record.speed_medal),
+                ("G", record.treasure_medal),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                text(
+                    if earned { label } else { "-" },
+                    x + 8.0 + i as f32 * 21.0,
+                    y + 16.0,
+                    1.0,
+                    if stage == game.selected_stage {
+                        INK
+                    } else if earned {
+                        GOLD
+                    } else {
+                        color_u8!(130, 150, 146, 255)
+                    },
+                );
+            }
         }
     }
+    let course = &crate::levels::COURSES[game.selected_stage];
+    let record = &game.progress.levels[game.selected_stage];
     centered(
-        crate::levels::COURSES[game.selected_stage].name,
-        187.0,
+        crate::levels::WORLD_NAMES[game.selected_stage / 4],
+        39.0,
         1.0,
         CREAM,
         view.x,
     );
+    centered(course.name, 181.0, 1.0, CREAM, view.x);
     centered(
-        crate::levels::WORLD_NAMES[game.selected_stage / 4],
-        204.0,
+        &format!(
+            "BEST {}  SCORE {}  PAR {}",
+            record
+                .best_ms
+                .map(time_label)
+                .unwrap_or_else(|| "--.--".into()),
+            record.high_score,
+            time_label(course.par_ms)
+        ),
+        194.0,
         1.0,
         GOLD,
         view.x,
     );
+    centered("C CLEAR  S SPEED  G THREE GEMS", 207.0, 1.0, CREAM, view.x);
     centered(
         "ARROWS SELECT  ENTER PLAY  ESC BACK",
-        view.y - 20.0,
+        view.y - 14.0,
         1.0,
         CREAM,
         view.x,

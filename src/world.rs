@@ -87,6 +87,7 @@ impl Player {
 pub struct Coin {
     pub pos: Vec2,
     pub collected: bool,
+    pub special: bool,
 }
 
 pub struct Particle {
@@ -211,6 +212,13 @@ impl Level {
                 .fire
                 .push(FireJet::new(x as f32 * TILE, 12.0 * TILE, offset));
         }
+        for (x, y) in course.challenge {
+            level.coins.push(Coin {
+                pos: vec2(x as f32 * TILE + 4.0, y as f32 * TILE + 3.0),
+                collected: false,
+                special: true,
+            });
+        }
         level
     }
 
@@ -218,6 +226,7 @@ impl Level {
         self.coins.push(Coin {
             pos: vec2(x as f32 * TILE + 4.0, y as f32 * TILE + 3.0),
             collected: false,
+            special: false,
         });
     }
 
@@ -252,6 +261,22 @@ impl Level {
     }
 }
 
+pub struct Finish {
+    pub millis: u64,
+    pub score: u32,
+    pub speed: bool,
+    pub treasure: bool,
+    pub personal_best: bool,
+}
+
+pub fn time_label(millis: u64) -> String {
+    if millis < 100_000 {
+        format!("{:02}.{:02}", millis / 1000, millis % 1000 / 10)
+    } else {
+        format!("{}:{:02}", millis / 60_000, millis / 1000 % 60)
+    }
+}
+
 pub struct Game {
     pub phase: Phase,
     pub stage: usize,
@@ -271,6 +296,9 @@ pub struct Game {
     pub progress: Progress,
     pub selected_stage: usize,
     pub save_notice: Option<&'static str>,
+    attempt_ticks: u64,
+    stage_score_start: u32,
+    pub finish: Option<Finish>,
 }
 
 impl Game {
@@ -294,7 +322,22 @@ impl Game {
             progress: Progress::default(),
             selected_stage: 0,
             save_notice: None,
+            attempt_ticks: 0,
+            stage_score_start: 0,
+            finish: None,
         }
+    }
+
+    pub fn elapsed_ms(&self) -> u64 {
+        self.attempt_ticks * 1000 / 120
+    }
+
+    pub fn challenge_count(&self) -> usize {
+        self.level
+            .coins
+            .iter()
+            .filter(|coin| coin.special && coin.collected)
+            .count()
     }
 
     pub fn start(&mut self) {
@@ -371,6 +414,11 @@ impl Game {
         if self.phase == Phase::Paused {
             return;
         }
+        // The simulation runs at 120 Hz. Death/respawn time counts; menus,
+        // pauses and the result screen never affect a completed record.
+        if matches!(self.phase, Phase::Playing | Phase::Dying) {
+            self.attempt_ticks += 1;
+        }
         self.time += dt;
         if matches!(
             self.phase,
@@ -419,6 +467,9 @@ impl Game {
                     self.phase = Phase::Won;
                 } else {
                     self.stage += 1;
+                    self.attempt_ticks = 0;
+                    self.stage_score_start = self.score;
+                    self.finish = None;
                     self.level = Level::new(self.stage);
                     self.player = Player::new(vec2(56.0, 175.0));
                     self.camera = 0.0;
@@ -643,11 +694,14 @@ impl Game {
                 && player_rect.overlaps(&Rect::new(coin.pos.x, coin.pos.y, 8.0, 10.0))
             {
                 coin.collected = true;
-                collected.push(coin.pos + vec2(4.0, 4.0));
+                collected.push((coin.pos + vec2(4.0, 4.0), coin.special));
             }
         }
-        for pos in collected {
+        for (pos, special) in collected {
             self.collect(pos);
+            if special {
+                self.score += 400;
+            }
         }
         let mut stomped = Vec::new();
         let mut hurt = false;
@@ -688,7 +742,22 @@ impl Game {
         }
         if self.player.pos.x >= self.level.goal {
             self.score += 1000;
-            self.progress.levels[self.stage].cleared = true;
+            let millis = self.elapsed_ms();
+            let score = self.score - self.stage_score_start;
+            let speed = millis <= crate::levels::COURSES[self.stage].par_ms;
+            let treasure = self.challenge_count() == 3;
+            let personal_best = self.progress.levels[self.stage]
+                .best_ms
+                .is_none_or(|best| millis < best);
+            self.progress
+                .finish(self.stage, millis, score, speed, treasure);
+            self.finish = Some(Finish {
+                millis,
+                score,
+                speed,
+                treasure,
+                personal_best,
+            });
             self.phase = Phase::StageClear;
             self.phase_time = 0.0;
             self.sounds.push(SoundEvent::Clear);
@@ -710,6 +779,155 @@ mod tests {
                 },
                 STEP,
             );
+        }
+    }
+
+    #[test]
+    fn timer_counts_respawns_but_excludes_pause_and_results() {
+        let mut game = Game::new();
+        advance(&mut game, 120, Input::default());
+        assert_eq!(game.elapsed_ms(), 0);
+        game.start();
+        advance(&mut game, 120, Input::default());
+        assert_eq!(game.elapsed_ms(), 1000);
+        game.toggle_pause();
+        advance(&mut game, 120, Input::default());
+        assert_eq!(game.elapsed_ms(), 1000);
+        game.toggle_pause();
+        game.die();
+        advance(&mut game, 160, Input::default());
+        assert_eq!(game.phase, Phase::Playing);
+        assert_eq!(game.elapsed_ms(), 2333);
+        game.player.pos = vec2(game.level.goal, 130.0);
+        game.update(Input::default(), STEP);
+        let time = game.elapsed_ms();
+        advance(&mut game, 100, Input::default());
+        assert_eq!(game.elapsed_ms(), time);
+        assert_eq!(game.progress.levels[0].best_ms, Some(time));
+        while game.phase == Phase::StageClear {
+            game.update(Input::default(), STEP);
+        }
+        assert_eq!(game.stage, 1);
+        assert_eq!(game.elapsed_ms(), 0);
+    }
+
+    #[test]
+    fn medals_and_records_reward_separate_completed_attempts() {
+        let mut game = Game::new();
+        game.start();
+        game.attempt_ticks = 120 * 30 - 1;
+        game.score = 200;
+        game.player.pos = vec2(game.level.goal, 130.0);
+        game.update(Input::default(), STEP);
+        assert!(game.progress.levels[0].speed_medal);
+        assert!(!game.progress.levels[0].treasure_medal);
+        assert_eq!(game.progress.levels[0].best_ms, Some(30_000));
+        assert_eq!(game.progress.levels[0].high_score, 1200);
+        game.start_stage(0);
+        game.level.coins.retain(|coin| coin.special);
+        let gems: Vec<_> = game
+            .level
+            .coins
+            .iter()
+            .filter(|coin| coin.special)
+            .map(|coin| coin.pos)
+            .collect();
+        for pos in gems {
+            game.player.pos = pos;
+            game.interact(Input::default());
+        }
+        assert_eq!(game.challenge_count(), 3);
+        assert_eq!(game.score, 1500);
+        assert!(
+            !game.progress.levels[0].treasure_medal,
+            "collecting without finishing is not a medal"
+        );
+        game.die();
+        advance(&mut game, 160, Input::default());
+        assert_eq!(game.challenge_count(), 3);
+        game.attempt_ticks = 120 * 90 - 1;
+        game.player.pos = vec2(game.level.goal, 130.0);
+        game.update(Input::default(), STEP);
+        let record = &game.progress.levels[0];
+        assert!(record.cleared && record.speed_medal && record.treasure_medal);
+        assert_eq!(record.best_ms, Some(30_000));
+        assert_eq!(record.high_score, 2500);
+        assert!(!game.finish.as_ref().unwrap().personal_best);
+        advance(&mut game, 313, Input::default());
+        game.player.pos = vec2(game.level.goal, 130.0);
+        game.update(Input::default(), STEP);
+        assert_eq!(
+            game.progress.levels[1].high_score, 1000,
+            "stage scores exclude earlier stages"
+        );
+        game.start_stage(0);
+        assert_eq!(game.elapsed_ms(), 0);
+        assert_eq!(game.challenge_count(), 0);
+        assert_eq!(game.progress.levels[0].high_score, 2500);
+    }
+
+    #[test]
+    fn every_course_has_three_distinct_collectible_challenge_coins() {
+        for stage in 0..STAGE_COUNT {
+            let level = Level::new(stage);
+            let gems: Vec<_> = level
+                .coins
+                .iter()
+                .filter(|coin| coin.special)
+                .map(|coin| coin.pos)
+                .collect();
+            assert_eq!(gems.len(), 3);
+            for (index, &pos) in gems.iter().enumerate() {
+                assert!(!gems[..index].contains(&pos));
+                assert!(level.solids(Rect::new(pos.x, pos.y, 8.0, 10.0)).is_empty());
+                // Verify the optional route's final jump with real collision and
+                // jump physics, starting on the authored ledge below each gem.
+                let x = pos.x;
+                let mut surfaces: Vec<f32> = (0..15)
+                    .filter(|&y| level.tile((x / TILE) as i32, y) != Tile::Air)
+                    .map(|y| y as f32 * TILE)
+                    .collect();
+                surfaces.extend(
+                    level
+                        .platforms
+                        .iter()
+                        .filter(|p| x >= p.pos.x && x + PLAYER_W <= p.pos.x + p.width)
+                        .map(|p| p.pos.y),
+                );
+                let reached = surfaces.into_iter().any(|floor| {
+                    if floor <= pos.y || floor - pos.y > 80.0 {
+                        return false;
+                    }
+                    let mut game = Game::new();
+                    game.stage = stage;
+                    game.level = Level::new(stage);
+                    game.phase = Phase::Playing;
+                    game.level.enemies.clear();
+                    game.level.fire.clear();
+                    game.player = Player::new(vec2(x, floor - PLAYER_H));
+                    game.player.grounded = true;
+                    if !game.level.solids(game.player.rect()).is_empty() {
+                        return false;
+                    }
+                    advance(
+                        &mut game,
+                        90,
+                        Input {
+                            jump_pressed: true,
+                            jump_held: true,
+                            ..Input::default()
+                        },
+                    );
+                    game.level
+                        .coins
+                        .iter()
+                        .any(|coin| coin.special && coin.pos == pos && coin.collected)
+                });
+                assert!(
+                    reached,
+                    "stage {stage}, gem at {pos:?} has no reachable final jump"
+                );
+            }
         }
     }
 

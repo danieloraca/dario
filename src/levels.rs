@@ -39,11 +39,15 @@ pub struct Course {
     pub enemies: &'static [(usize, usize, EnemyKind)],
     pub platforms: &'static [PlatformSpec],
     pub fire: &'static [(usize, f32)],
+    pub challenge: [(usize, usize); 3],
+    pub par_ms: u64,
 }
 
 pub const COURSES: [Course; 16] = [
     Course {
         name: "SUNNY SIDE UP",
+        challenge: [(14, 6), (82, 6), (130, 6)],
+        par_ms: 40_000,
         width: 150,
         checkpoint: 74,
         gaps: &[(29, 31), (62, 65), (99, 102), (121, 124)],
@@ -71,6 +75,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "THE GOLDEN HOUR",
+        challenge: [(20, 4), (65, 4), (104, 5)],
+        par_ms: 45_000,
         width: 164,
         checkpoint: 74,
         gaps: &[(24, 27), (48, 51), (91, 94), (116, 120), (140, 143)],
@@ -99,6 +105,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "ONE MORE SUNSET",
+        challenge: [(23, 4), (105, 4), (137, 4)],
+        par_ms: 50_000,
         width: 178,
         checkpoint: 74,
         gaps: &[(30, 34), (56, 59), (83, 87), (114, 118), (145, 149)],
@@ -131,6 +139,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "LEAP OF FAITH",
+        challenge: [(22, 4), (68, 3), (124, 3)],
+        par_ms: 52_000,
         width: 184,
         checkpoint: 88,
         gaps: &[
@@ -169,6 +179,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "CRYSTAL CROSSING",
+        challenge: [(23, 4), (62, 7), (101, 6)],
+        par_ms: 50_000,
         width: 166,
         checkpoint: 78,
         gaps: &[(31, 35), (60, 65), (99, 103), (128, 133)],
@@ -195,6 +207,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "LOOSE FOOTING",
+        challenge: [(22, 4), (97, 7), (138, 6)],
+        par_ms: 55_000,
         width: 174,
         checkpoint: 82,
         gaps: &[(29, 34), (55, 61), (94, 100), (125, 130), (146, 150)],
@@ -226,6 +240,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "RISING FORTUNES",
+        challenge: [(49, 3), (101, 7), (122, 3)],
+        par_ms: 58_000,
         width: 180,
         checkpoint: 86,
         gaps: &[(33, 37), (58, 63), (98, 104), (131, 135), (151, 156)],
@@ -258,6 +274,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "CAVERN RELAY",
+        challenge: [(20, 4), (75, 7), (106, 6)],
+        par_ms: 62_000,
         width: 190,
         checkpoint: 88,
         gaps: &[
@@ -301,6 +319,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "CLOUD NINE",
+        challenge: [(23, 4), (72, 3), (124, 7)],
+        par_ms: 56_000,
         width: 170,
         checkpoint: 80,
         gaps: &[(28, 33), (53, 59), (94, 99), (121, 127), (145, 149)],
@@ -334,6 +354,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "THE HIGH ROAD",
+        challenge: [(27, 2), (51, 3), (120, 3)],
+        par_ms: 62_000,
         width: 182,
         checkpoint: 86,
         gaps: &[(32, 37), (62, 68), (97, 103), (129, 135), (152, 158)],
@@ -370,6 +392,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "FEATHERWEIGHT",
+        challenge: [(47, 3), (108, 6), (128, 3)],
+        par_ms: 62_000,
         width: 186,
         checkpoint: 88,
         gaps: &[
@@ -413,6 +437,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "SKYLINE SPRINT",
+        challenge: [(49, 3), (80, 6), (132, 3)],
+        par_ms: 68_000,
         width: 194,
         checkpoint: 92,
         gaps: &[
@@ -457,6 +483,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "FIRST SPARK",
+        challenge: [(24, 4), (92, 6), (133, 7)],
+        par_ms: 60_000,
         width: 176,
         checkpoint: 82,
         gaps: &[(32, 36), (59, 64), (101, 105), (131, 136), (151, 155)],
@@ -483,6 +511,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "HOT STEPS",
+        challenge: [(22, 4), (108, 6), (129, 3)],
+        par_ms: 66_000,
         width: 186,
         checkpoint: 88,
         gaps: &[
@@ -524,6 +554,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "FIRE AND FLIGHT",
+        challenge: [(51, 3), (80, 6), (132, 3)],
+        par_ms: 70_000,
         width: 192,
         checkpoint: 90,
         gaps: &[
@@ -567,6 +599,8 @@ pub const COURSES: [Course; 16] = [
     },
     Course {
         name: "THE LAST LEAP",
+        challenge: [(50, 3), (137, 3), (179, 7)],
+        par_ms: 75_000,
         width: 204,
         checkpoint: 96,
         gaps: &[

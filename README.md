@@ -74,9 +74,11 @@ The game's [build script](build.rs) explicitly imports JavaScript-provided funct
 | R | Retry the current level |
 | Q | Quit |
 
-Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through a level mark your checkpoint. Coins are worth 100 points, beetles 200, and each finish 1,000. Dying preserves collected coins and used blocks; restarting begins a fresh run.
+Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through a level mark your checkpoint. Coins are worth 100 points, turquoise challenge gems 500, beetles 200, and each finish 1,000. Dying preserves collected coins and used blocks; restarting begins a fresh run.
 
 Campaign clears unlock the next level permanently. Enter continues at the latest unlocked level; **L** opens level selection (arrows to select, Enter to play). Each level starts with three lives, and retrying keeps previously unlocked levels.
+
+Each course has three independent medals: **C** for clearing it, **S** for beating its par time, and **G** for finishing with all three turquoise challenge gems. Earn them across separate attempts. The level picker shows the par time, your fastest finish and highest course score. Time includes deaths and respawns, but excludes pauses, menus and results; collected gems survive checkpoint respawns. Records are awarded at the finish and saved automatically.
 
 Desktop progress and sound preferences save automatically to a versioned JSON file: `~/Library/Application Support/Dario/progress.json` on macOS, `%APPDATA%/Dario/progress.json` on Windows, or `$XDG_DATA_HOME/dario/progress.json` (default `~/.local/share/dario/progress.json`) on Linux. Set `DARIO_SAVE_PATH` to choose another file. Writes replace the previous file atomically. A damaged or unsupported save is preserved, and the game displays a guest-mode notice. Smoke tests never read or write player saves.
 
@@ -102,7 +104,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -- --smoke-test
 ```
 
-The smoke test opens a real game window, simulates movement and a jump, and writes screenshots of the title, gameplay, pause, all four world themes, victory and level selection to `target/smoke/`. It requires a graphical desktop and uses staged states to exercise the later screens; it is not an automated playthrough of every level.
+The smoke test opens a real game window, simulates movement and a jump, and writes screenshots of the title, gameplay, pause, all four world themes, victory, level selection and results to `target/smoke/`. It requires a graphical desktop and uses staged states to exercise the later screens; it is not an automated playthrough of every level.
 
 ```sh
 cargo run -- --mute           # Start quietly

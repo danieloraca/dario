@@ -204,10 +204,17 @@ async fn run(muted: bool, smoke: bool) {
                 112 => {
                     for record in &mut game.progress.levels {
                         record.cleared = true;
+                        record.speed_medal = true;
+                        record.best_ms = Some(31_250);
+                        record.high_score = 6400;
                     }
                     game.select_levels();
                 }
-                114 => break,
+                114 => {
+                    game.start_stage(0);
+                    game.player.pos = vec2(game.level.goal, 130.0);
+                }
+                116 => break,
                 _ => {}
             }
             input.axis = if (2..102).contains(&frame) { 1.0 } else { 0.0 };
@@ -307,6 +314,7 @@ async fn run(muted: bool, smoke: bool) {
                 109 => Some("ember-fortress"),
                 111 => Some("victory"),
                 113 => Some("level-select"),
+                115 => Some("results"),
                 _ => None,
             };
             if let Some(name) = screenshot {
