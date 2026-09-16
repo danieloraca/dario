@@ -155,6 +155,18 @@ systemctl status dario.service --no-pager
 
 `reset-failed` clears the restart limit after repeated failures. The deployment installer also clears it before starting the service.
 
+If a WASM build reports `undefined symbol: audio_add_buffer`, `audio_init`, or `dario_status`, update to the version containing the root `build.rs`. Those functions are supplied by the browser's JavaScript runtime. The build script explicitly passes [LLD's `--import-undefined` option](https://lld.llvm.org/WebAssembly.html) for the game's WASM binary, so it works without the older permissive linker default. The Pi archive includes this build script.
+
+To rebuild an older checkout immediately, use this command on the Pi:
+
+```sh
+cd ~/Development/dario &&
+CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS='-C link-arg=--import-undefined' sh scripts/build-web.sh &&
+sudo systemctl reset-failed dario.service &&
+sudo systemctl restart dario.service &&
+systemctl status dario.service --no-pager
+```
+
 ## Updates and port changes
 
 Run `make deploy` again from the Mac for an update. The installer copies only the server binary, public browser files, and unit. It stops Dario only for the file replacement, after building finishes. Reload the browser once the update finishes. The manual build and upload steps above are also available.

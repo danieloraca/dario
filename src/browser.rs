@@ -1,6 +1,7 @@
 //! The browser boundary. Simulation, artwork and audio stay shared with desktop.
 use crate::world::{Game, Phase};
 
+#[link(wasm_import_module = "env")]
 unsafe extern "C" {
     fn dario_status(phase: u32, world: u32, coins: u32, lives: u32, muted: u32);
     fn dario_take_pause_request() -> u32;

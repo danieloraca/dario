@@ -57,6 +57,8 @@ DARIO_ADDR=127.0.0.1:3041 ./target/release/dario-server
 
 For static hosting, run `sh scripts/build-web.sh` and publish the contents of `target/web/`. Serve `.wasm` as `application/wasm` over HTTP(S), rather than opening the HTML as a local file. The build assembles the graphics and audio JavaScript runtime from the versions of Miniquad and quad-snd in `Cargo.lock`, so it uses no CDN or third-party requests. This also avoids an unused plugin error in Macroquad 0.4.16's prebuilt JavaScript bundle. See [Macroquad's WebAssembly documentation](https://github.com/not-fl3/macroquad#wasm).
 
+The game's [build script](build.rs) explicitly imports JavaScript-provided functions when linking WebAssembly, including quad-snd's audio functions. This avoids relying on older Rust linker defaults; the setting applies only to the game's `wasm32-unknown-unknown` build. Dario's own browser imports explicitly name the `env` module supplied by `web/game.js`.
+
 | Key | Action |
 | --- | --- |
 | Arrow keys / A, D | Move |
