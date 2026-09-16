@@ -76,7 +76,7 @@ Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through
 ## The little details
 
 - Three handmade stages: **Sunny Side Up**, **The Golden Hour**, and **One More Sunset**.
-- A 384 × 240 canvas, nearest-neighbor integer scaling, parallax hills, animated coins, and a homemade bitmap alphabet.
+- A 384 × 240 canvas, nearest-neighbor integer scaling, parallax hills, animated coins, and a bold, homemade 7×7 arcade alphabet.
 - Fixed 120 Hz physics, acceleration, variable jump height, a small grace period after leaving ledges, and buffered jumps just before landing.
 - An original 16-bar chiptune with pulse-wave melody, triangle bass, arpeggios, and synthesized noise drums. Seven synthesized effects cover jumping, coins, bumps, stomps, damage, checkpoints, and finishes.
 - All sprites, music, and sound effects are generated in Rust. No Nintendo artwork, recordings, or music are included.

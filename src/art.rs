@@ -7,6 +7,8 @@ const CREAM: Color = color_u8!(255, 246, 211, 255);
 const GOLD: Color = color_u8!(255, 202, 79, 255);
 const ORANGE: Color = color_u8!(230, 122, 58, 255);
 const RED: Color = color_u8!(194, 71, 52, 255);
+const GLYPH_WIDTH: usize = 7;
+const GLYPH_ADVANCE: usize = GLYPH_WIDTH + 1;
 
 pub fn icon() -> macroquad::miniquad::conf::Icon {
     fn pixels<const N: usize>(side: usize) -> [u8; N] {
@@ -15,9 +17,9 @@ pub fn icon() -> macroquad::miniquad::conf::Icon {
             for x in 0..side {
                 let px = x * 16 / side;
                 let py = y * 16 / side;
-                let letter = (3..13).contains(&px)
+                let letter = (1..15).contains(&px)
                     && (1..15).contains(&py)
-                    && glyph('D')[(py - 1) / 2] & (1 << (4 - (px - 3) / 2)) != 0;
+                    && glyph('D')[(py - 1) / 2] & (1 << (GLYPH_WIDTH - 1 - (px - 1) / 2)) != 0;
                 let color = if letter { GOLD } else { INK };
                 let offset = (y * side + x) * 4;
                 bytes[offset..offset + 4].copy_from_slice(&[
@@ -42,52 +44,53 @@ fn rect(x: f32, y: f32, w: f32, h: f32, color: Color) {
 }
 
 fn glyph(c: char) -> [u8; 7] {
+    // Seven-pixel arcade capitals: broad strokes, clipped corners, fixed spacing.
     match c {
-        'A' => [14, 17, 17, 31, 17, 17, 17],
-        'B' => [30, 17, 17, 30, 17, 17, 30],
-        'C' => [14, 17, 16, 16, 16, 17, 14],
-        'D' => [30, 17, 17, 17, 17, 17, 30],
-        'E' => [31, 16, 16, 30, 16, 16, 31],
-        'F' => [31, 16, 16, 30, 16, 16, 16],
-        'G' => [14, 17, 16, 23, 17, 17, 15],
-        'H' => [17, 17, 17, 31, 17, 17, 17],
-        'I' => [31, 4, 4, 4, 4, 4, 31],
-        'J' => [7, 2, 2, 2, 18, 18, 12],
-        'K' => [17, 18, 20, 24, 20, 18, 17],
-        'L' => [16, 16, 16, 16, 16, 16, 31],
-        'M' => [17, 27, 21, 21, 17, 17, 17],
-        'N' => [17, 25, 25, 21, 19, 19, 17],
-        'O' => [14, 17, 17, 17, 17, 17, 14],
-        'P' => [30, 17, 17, 30, 16, 16, 16],
-        'Q' => [14, 17, 17, 17, 21, 18, 13],
-        'R' => [30, 17, 17, 30, 20, 18, 17],
-        'S' => [15, 16, 16, 14, 1, 1, 30],
-        'T' => [31, 4, 4, 4, 4, 4, 4],
-        'U' => [17, 17, 17, 17, 17, 17, 14],
-        'V' => [17, 17, 17, 17, 17, 10, 4],
-        'W' => [17, 17, 17, 21, 21, 21, 10],
-        'X' => [17, 17, 10, 4, 10, 17, 17],
-        'Y' => [17, 17, 10, 4, 4, 4, 4],
-        'Z' => [31, 1, 2, 4, 8, 16, 31],
-        '0' => [14, 17, 19, 21, 25, 17, 14],
-        '1' => [4, 12, 4, 4, 4, 4, 14],
-        '2' => [14, 17, 1, 2, 4, 8, 31],
-        '3' => [30, 1, 1, 14, 1, 1, 30],
-        '4' => [2, 6, 10, 18, 31, 2, 2],
-        '5' => [31, 16, 16, 30, 1, 1, 30],
-        '6' => [14, 16, 16, 30, 17, 17, 14],
-        '7' => [31, 1, 2, 4, 8, 8, 8],
-        '8' => [14, 17, 17, 14, 17, 17, 14],
-        '9' => [14, 17, 17, 15, 1, 1, 14],
-        '!' => [4, 4, 4, 4, 4, 0, 4],
-        '?' => [14, 17, 1, 2, 4, 0, 4],
-        '-' => [0, 0, 0, 31, 0, 0, 0],
-        '+' => [0, 4, 4, 31, 4, 4, 0],
-        '/' => [1, 2, 2, 4, 8, 8, 16],
-        ':' => [0, 4, 4, 0, 4, 4, 0],
-        '.' => [0, 0, 0, 0, 0, 12, 12],
-        '>' => [16, 8, 4, 2, 4, 8, 16],
-        '<' => [1, 2, 4, 8, 4, 2, 1],
+        'A' => [28, 54, 99, 99, 127, 99, 99],
+        'B' => [126, 99, 99, 126, 99, 99, 126],
+        'C' => [62, 99, 96, 96, 96, 99, 62],
+        'D' => [124, 102, 99, 99, 99, 102, 124],
+        'E' => [127, 96, 96, 124, 96, 96, 127],
+        'F' => [127, 96, 96, 124, 96, 96, 96],
+        'G' => [62, 99, 96, 111, 99, 99, 62],
+        'H' => [99, 99, 99, 127, 99, 99, 99],
+        'I' => [62, 28, 28, 28, 28, 28, 62],
+        'J' => [31, 6, 6, 6, 102, 102, 60],
+        'K' => [99, 102, 108, 120, 108, 102, 99],
+        'L' => [96, 96, 96, 96, 96, 96, 127],
+        'M' => [99, 119, 127, 107, 99, 99, 99],
+        'N' => [99, 115, 123, 111, 103, 99, 99],
+        'O' => [62, 99, 99, 99, 99, 99, 62],
+        'P' => [126, 99, 99, 126, 96, 96, 96],
+        'Q' => [62, 99, 99, 99, 107, 102, 61],
+        'R' => [126, 99, 99, 126, 108, 102, 99],
+        'S' => [62, 99, 96, 62, 3, 99, 62],
+        'T' => [127, 28, 28, 28, 28, 28, 28],
+        'U' => [99, 99, 99, 99, 99, 99, 62],
+        'V' => [99, 99, 99, 99, 54, 28, 8],
+        'W' => [99, 99, 99, 107, 127, 119, 99],
+        'X' => [99, 54, 28, 8, 28, 54, 99],
+        'Y' => [99, 99, 54, 28, 28, 28, 28],
+        'Z' => [127, 3, 6, 12, 24, 48, 127],
+        '0' => [62, 99, 103, 107, 115, 99, 62],
+        '1' => [12, 28, 60, 12, 12, 12, 63],
+        '2' => [62, 99, 3, 14, 56, 96, 127],
+        '3' => [62, 99, 3, 30, 3, 99, 62],
+        '4' => [6, 14, 30, 54, 127, 6, 6],
+        '5' => [127, 96, 126, 3, 3, 99, 62],
+        '6' => [30, 48, 96, 126, 99, 99, 62],
+        '7' => [127, 99, 6, 12, 24, 24, 24],
+        '8' => [62, 99, 99, 62, 99, 99, 62],
+        '9' => [62, 99, 99, 63, 3, 6, 60],
+        '!' => [28, 28, 28, 28, 28, 0, 28],
+        '?' => [62, 99, 3, 14, 28, 0, 28],
+        '-' => [0, 0, 0, 62, 0, 0, 0],
+        '+' => [0, 28, 28, 127, 28, 28, 0],
+        '/' => [3, 6, 12, 24, 48, 96, 64],
+        ':' => [0, 28, 28, 0, 28, 28, 0],
+        '.' => [0, 0, 0, 0, 0, 28, 28],
+        '>' => [96, 48, 24, 12, 24, 48, 96],
+        '<' => [3, 6, 12, 24, 12, 6, 3],
         _ => [0; 7],
     }
 }
@@ -95,10 +98,10 @@ fn glyph(c: char) -> [u8; 7] {
 pub fn text(label: &str, x: f32, y: f32, size: f32, color: Color) {
     for (i, c) in label.chars().enumerate() {
         for (row, bits) in glyph(c.to_ascii_uppercase()).iter().enumerate() {
-            for col in 0..5 {
-                if bits & (1 << (4 - col)) != 0 {
+            for col in 0..GLYPH_WIDTH {
+                if bits & (1 << (GLYPH_WIDTH - 1 - col)) != 0 {
                     rect(
-                        x + (i as f32 * 6.0 + col as f32) * size,
+                        x + (i * GLYPH_ADVANCE + col) as f32 * size,
                         y + row as f32 * size,
                         size,
                         size,
@@ -110,8 +113,12 @@ pub fn text(label: &str, x: f32, y: f32, size: f32, color: Color) {
     }
 }
 
+fn text_width(label: &str, size: f32) -> f32 {
+    (label.chars().count() as f32 * GLYPH_ADVANCE as f32 - 1.0).max(0.0) * size
+}
+
 fn centered(label: &str, y: f32, size: f32, color: Color) {
-    let width = (label.len() as f32 * 6.0 - 1.0) * size;
+    let width = text_width(label, size);
     text(label, (WIDTH - width) / 2.0, y, size, color);
 }
 
@@ -322,8 +329,8 @@ fn tile(game: &Game, kind: Tile, tx: i32, ty: i32, x: f32, y: f32) {
                 rect(x + dx, y + dy, 1.0, 1.0, color_u8!(159, 98, 38, 255));
             }
             if !used {
-                text("?", x + 6.0, y + 5.0, 1.0, ORANGE);
-                text("?", x + 5.0, y + 4.0, 1.0, CREAM);
+                text("?", x + 5.0, y + 5.0, 1.0, ORANGE);
+                text("?", x + 4.0, y + 4.0, 1.0, CREAM);
             }
         }
         Tile::PipeLeft | Tile::PipeRight => {
@@ -472,7 +479,7 @@ fn scenery(game: &Game) {
         rect(x + 8.0, 174.0, 3.0, 18.0, color_u8!(120, 83, 56, 255));
         rect(x, 168.0, 24.0, 12.0, color_u8!(120, 83, 56, 255));
         rect(x + 1.0, 169.0, 22.0, 9.0, color_u8!(226, 178, 110, 255));
-        text(">", x + 10.0, 170.0, 1.0, INK);
+        text(">", x + 9.0, 170.0, 1.0, INK);
     }
     let cp = game.level.checkpoint.x - camera;
     rect(cp + 3.0, 155.0, 2.0, 37.0, INK);
@@ -485,7 +492,7 @@ fn scenery(game: &Game) {
     );
     text(
         "+",
-        cp + 9.0,
+        cp + 8.0,
         158.0,
         1.0,
         if game.checkpoint {
@@ -556,7 +563,7 @@ fn hud(game: &Game, muted: bool) {
     text("SCORE", 148.0, 6.0, 1.0, color_u8!(156, 184, 160, 255));
     text(&format!("{:06}", game.score), 148.0, 18.0, 1.0, CREAM);
     text("WORLD", 217.0, 6.0, 1.0, color_u8!(156, 184, 160, 255));
-    text(&format!("1-{}", game.stage + 1), 223.0, 18.0, 1.0, CREAM);
+    text(&format!("1-{}", game.stage + 1), 225.0, 18.0, 1.0, CREAM);
     text(
         if muted { "M / OFF" } else { "M / ON" },
         280.0,
@@ -575,7 +582,7 @@ fn hud(game: &Game, muted: bool) {
         } else {
             game.level.name
         };
-        let width = label.len() as f32 * 6.0 + 20.0;
+        let width = text_width(label, 1.0) + 20.0;
         rect((WIDTH - width) / 2.0, 43.0, width, 19.0, INK);
         centered(label, 49.0, 1.0, CREAM);
     }
@@ -583,22 +590,29 @@ fn hud(game: &Game, muted: bool) {
 
 fn title(game: &Game, muted: bool) {
     text("DARIO / 01", 13.0, 12.0, 1.0, INK);
-    text("A RUST ORIGINAL", 282.0, 12.0, 1.0, INK);
+    let credit = "A RUST ORIGINAL";
+    text(
+        credit,
+        WIDTH - 13.0 - text_width(credit, 1.0),
+        12.0,
+        1.0,
+        INK,
+    );
     centered("SMALL GAME. BIG LITTLE ADVENTURE.", 38.0, 1.0, INK);
     // Chunky, offset lettering is drawn with the same hand-made bitmap alphabet.
-    let x = (WIDTH - 29.0 * 7.0) / 2.0;
+    let x = (WIDTH - text_width("DARIO", 7.0)) / 2.0;
     for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 7.0), (3.0, 5.0)] {
         text("DARIO", x + dx, 57.0 + dy, 7.0, INK);
     }
     text("DARIO", x, 61.0, 7.0, RED);
     text("DARIO", x, 57.0, 7.0, GOLD);
     centered("A LITTLE RUST. A LOT OF JUMP.", 119.0, 1.0, INK);
-    rect(111.0, 137.0, 164.0, 23.0, color_u8!(43, 80, 67, 255));
-    rect(109.0, 134.0, 164.0, 23.0, INK);
-    rect(110.0, 135.0, 162.0, 1.0, color_u8!(101, 136, 103, 255));
+    rect(94.0, 137.0, 200.0, 23.0, color_u8!(43, 80, 67, 255));
+    rect(92.0, 134.0, 200.0, 23.0, INK);
+    rect(93.0, 135.0, 198.0, 1.0, color_u8!(101, 136, 103, 255));
     centered("PRESS ENTER TO PLAY", 142.0, 1.0, CREAM);
     if (game.time * 2.0) as i32 % 2 == 0 {
-        text(">", 117.0, 142.0, 1.0, GOLD);
+        text(">", 102.0, 142.0, 1.0, GOLD);
     }
     rect(0.0, 202.0, WIDTH, 38.0, INK);
     rect(0.0, 201.0, WIDTH, 1.0, color_u8!(94, 129, 94, 255));
