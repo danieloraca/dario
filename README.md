@@ -76,7 +76,7 @@ The game's [build script](build.rs) explicitly imports JavaScript-provided funct
 | C | Start Arcade from the title or an end screen |
 | Q | Quit |
 
-Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through a level mark your checkpoint. Coins are worth 100 points, turquoise challenge gems 500, beetles 200, and each finish 1,000. Dying preserves collected coins and used blocks; restarting begins a fresh run.
+Hold jump when stomping a beetle for an extra bounce. Chain stomps before touching a floor or platform for 200, 400, 600… points per beetle, capped at an ×8 multiplier; landing or dying ends the chain. Elevated beetle pairs in the world finales reward this route. Gold flags halfway through a level mark your checkpoint. Coins are worth 100 points, turquoise challenge gems 500, beetles 200, and each finish 1,000. Dying preserves collected coins and used blocks; restarting begins a fresh run.
 
 Campaign clears unlock the next level permanently. Enter continues at the latest unlocked level; **L** opens level selection (arrows to select, Enter to play). Each level starts with three lives, and retrying keeps previously unlocked levels.
 
@@ -93,6 +93,7 @@ In the browser, enter a player name before playing; the browser remembers it. Us
 ## The little details
 
 - Sixteen authored stages across **Sunny Hills**, **Crystal Caves**, **Skyworks** and **Ember Fortress**, with a finale in each world.
+- Three independent medals per stage, personal time and score records, clean Time Trials, and a three-life Arcade campaign.
 - Moving lifts, collapsing floors, hopping and flying beetles, and fire jets with a visible warning before they ignite. The course definitions live in `src/levels.rs`.
 - A 384 × 240 base canvas, an expanding browser viewport, nearest-neighbor scaling (integer scaling on desktop), parallax hills, animated coins, and a bold, homemade 7×7 arcade alphabet.
 - Fixed 120 Hz physics, acceleration, variable jump height, a small grace period after leaving ledges, and buffered jumps just before landing.

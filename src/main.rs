@@ -229,7 +229,16 @@ async fn run(muted: bool, smoke: bool) {
                     game.start_arcade();
                     game.toggle_pause();
                 }
-                120 => break,
+                120 => {
+                    game.mode = Mode::Campaign;
+                    game.start_stage(3);
+                    game.player.pos = vec2(119.0 * world::TILE, 95.0);
+                    game.player.vel.y = -110.0;
+                    game.stomp_chain = 2;
+                    game.camera = game.player.pos.x - 136.0;
+                    game.banner_time = 0.0;
+                }
+                122 => break,
                 _ => {}
             }
             input.axis = if (2..102).contains(&frame) { 1.0 } else { 0.0 };
@@ -342,6 +351,7 @@ async fn run(muted: bool, smoke: bool) {
                 115 => Some("results"),
                 117 => Some("trial-results"),
                 119 => Some("arcade-paused"),
+                121 => Some("stomp-combo"),
                 _ => None,
             };
             if let Some(name) = screenshot {

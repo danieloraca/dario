@@ -810,12 +810,13 @@ fn title(game: &Game, muted: bool, view: Vec2) {
         CREAM,
         view.x,
     );
-    centered("L LEVELS    T TIME TRIAL", 173.0 + dy, 1.0, INK, view.x);
+    rect(44.0 + dx, 165.0 + dy, 296.0, 32.0, INK);
+    centered("L LEVELS    T TIME TRIAL", 173.0 + dy, 1.0, CREAM, view.x);
     centered(
         "C ARCADE - 3 LIVES / 16 LEVELS",
         187.0 + dy,
         1.0,
-        INK,
+        CREAM,
         view.x,
     );
     if (game.time * 2.0) as i32 % 2 == 0 {
@@ -1058,6 +1059,13 @@ pub fn draw_world(game: &Game, view: Vec2, camera: f32) {
         }
     }
     player(game, camera);
+    if game.stomp_chain > 1 {
+        let label = format!("X{}", game.stomp_chain);
+        let x = game.player.pos.x - camera - 2.0;
+        let y = game.player.pos.y - 13.0;
+        rect(x - 2.0, y - 2.0, text_width(&label, 1.0) + 4.0, 11.0, INK);
+        text(&label, x, y, 1.0, GOLD);
+    }
     for p in &game.particles {
         rect(
             p.pos.x - camera,

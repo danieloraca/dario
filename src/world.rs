@@ -307,6 +307,7 @@ pub struct Game {
     attempt_ticks: u64,
     stage_score_start: u32,
     pub finish: Option<Finish>,
+    pub stomp_chain: u32,
 }
 
 impl Game {
@@ -334,6 +335,7 @@ impl Game {
             attempt_ticks: 0,
             stage_score_start: 0,
             finish: None,
+            stomp_chain: 0,
         }
     }
 
@@ -462,6 +464,7 @@ impl Game {
         if self.phase != Phase::Playing {
             return;
         }
+        self.stomp_chain = 0;
         self.phase = Phase::Dying;
         self.phase_time = 0.0;
         self.player.vel = vec2(0.0, -210.0);
@@ -532,6 +535,7 @@ impl Game {
                     self.attempt_ticks = 0;
                     self.stage_score_start = self.score;
                     self.finish = None;
+                    self.stomp_chain = 0;
                     self.level = Level::new(self.stage);
                     self.player = Player::new(vec2(56.0, 175.0));
                     self.camera = 0.0;
@@ -551,6 +555,9 @@ impl Game {
 
         self.move_platforms(dt);
         self.move_player(input, dt);
+        if self.player.grounded {
+            self.stomp_chain = 0;
+        }
         self.move_enemies(dt);
         self.interact(input);
         let desired =
@@ -769,16 +776,21 @@ impl Game {
         }
         let mut stomped = Vec::new();
         let mut hurt = false;
+        // Several patrolling beetles can overlap. Classify every contact using
+        // the incoming motion, before a stomp applies the upward bounce.
+        let descending = self.player.vel.y > 0.0;
+        let feet_before = self.player.pos.y + PLAYER_H - self.player.vel.y * STEP;
         for enemy in &mut self.level.enemies {
             if enemy.squished.is_some() || !player_rect.overlaps(&enemy.rect()) {
                 continue;
             }
-            let feet_before = self.player.pos.y + PLAYER_H - self.player.vel.y * STEP;
-            if self.player.vel.y > 0.0 && feet_before <= enemy.pos.y + 5.0 {
+            if descending && feet_before <= enemy.pos.y + 5.0 {
                 enemy.squished = Some(0.3);
-                self.player.pos.y = enemy.pos.y - PLAYER_H;
+                self.player.pos.y = self.player.pos.y.min(enemy.pos.y - PLAYER_H);
                 self.player.vel.y = if input.jump_held { -260.0 } else { -185.0 };
-                self.score += 200;
+                self.player.grounded = false;
+                self.stomp_chain = (self.stomp_chain + 1).min(8);
+                self.score += 200 * self.stomp_chain;
                 stomped.push(enemy.pos + vec2(7.0, 5.0));
             } else if self.player.invulnerable <= 0.0 {
                 hurt = true;
@@ -849,6 +861,127 @@ mod tests {
                 },
                 STEP,
             );
+        }
+    }
+
+    #[test]
+    fn landing_on_converged_beetles_stomps_both_without_losing_a_life() {
+        for (stage, first_x, second_x) in [(3, 117, 119), (11, 124, 126), (15, 129, 131)] {
+            let mut game = Game::new();
+            game.level = Level::new(stage);
+            game.stage = stage;
+            game.phase = Phase::Playing;
+            game.level.coins.clear();
+            game.level
+                .enemies
+                .retain(|enemy| [first_x, second_x].contains(&((enemy.origin.x / TILE) as i32)));
+            game.player.pos = vec2(first_x as f32 * TILE, 80.0);
+            for _ in 0..142 {
+                game.move_enemies(STEP);
+            }
+            assert!((game.level.enemies[0].pos.x - game.level.enemies[1].pos.x).abs() < 1.0);
+            let x = game
+                .level
+                .enemies
+                .iter()
+                .map(|enemy| enemy.pos.x)
+                .fold(f32::NEG_INFINITY, f32::max);
+            game.player.pos = vec2(x, 115.0);
+            game.player.vel.y = 120.0;
+            game.update(
+                Input {
+                    jump_held: true,
+                    ..Input::default()
+                },
+                STEP,
+            );
+            assert_eq!(game.phase, Phase::Playing);
+            assert_eq!(game.lives, 3);
+            assert_eq!(game.stomp_chain, 2);
+            assert_eq!(game.score, 600);
+            assert!(
+                game.level
+                    .enemies
+                    .iter()
+                    .all(|enemy| enemy.squished.is_some())
+            );
+            assert!(game.player.vel.y < 0.0);
+        }
+    }
+
+    #[test]
+    fn authored_airborne_stomp_pairs_award_combos_and_reset_on_landing_or_death() {
+        for (stage, first_x, second_x) in [(3, 117, 119), (11, 124, 126), (15, 129, 131)] {
+            let mut game = Game::new();
+            game.stage = stage;
+            game.level = Level::new(stage);
+            game.phase = Phase::Playing;
+            game.level.coins.clear();
+            game.level
+                .enemies
+                .retain(|enemy| [first_x, second_x].contains(&((enemy.origin.x / TILE) as i32)));
+            assert_eq!(game.level.enemies.len(), 2);
+            game.player = Player::new(vec2(
+                first_x as f32 * TILE + 1.0,
+                9.0 * TILE - 12.0 - PLAYER_H,
+            ));
+            game.player.vel.y = 120.0;
+            game.update(
+                Input {
+                    jump_held: true,
+                    ..Input::default()
+                },
+                STEP,
+            );
+            assert_eq!(game.score, 200);
+            assert_eq!(game.stomp_chain, 1);
+            // Steer toward the second moving beetle during the bounce. No
+            // teleports after the first stomp: use the normal input/physics.
+            for _ in 0..120 {
+                let target = game
+                    .level
+                    .enemies
+                    .iter()
+                    .find(|enemy| enemy.origin.x == second_x as f32 * TILE)
+                    .unwrap()
+                    .pos
+                    .x;
+                let delta = target - game.player.pos.x;
+                game.update(
+                    Input {
+                        axis: if delta.abs() > 2.0 {
+                            delta.signum()
+                        } else {
+                            0.0
+                        },
+                        jump_held: true,
+                        ..Input::default()
+                    },
+                    STEP,
+                );
+                if game.stomp_chain == 2 {
+                    break;
+                }
+            }
+            assert_eq!(game.phase, Phase::Playing, "stage {stage}");
+            assert_eq!(game.stomp_chain, 2, "stage {stage}");
+            assert_eq!(game.score, 600);
+            if stage == 3 {
+                game.die();
+                assert_eq!(game.stomp_chain, 0);
+            } else {
+                advance(
+                    &mut game,
+                    120,
+                    Input {
+                        jump_held: true,
+                        ..Input::default()
+                    },
+                );
+                assert!(game.player.grounded);
+                assert_eq!(game.stomp_chain, 0);
+                assert_eq!(game.score, 600, "defeated enemies cannot pay twice");
+            }
         }
     }
 
