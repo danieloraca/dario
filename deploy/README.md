@@ -114,6 +114,7 @@ cargo build --release --locked -p dario-server
 sudo install -m 0644 deploy/dario.service /etc/systemd/system/dario.service
 sudo systemd-analyze verify /etc/systemd/system/dario.service
 sudo systemctl daemon-reload
+sudo systemctl reset-failed dario.service
 sudo systemctl enable dario.service
 sudo systemctl restart dario.service
 ```
@@ -140,6 +141,19 @@ If startup fails, check the journal above. Common causes are a missing `target/w
 ```sh
 ss -ltnp 'sport = :3041'
 ```
+
+If the journal reports `target/web/index.html: No such file or directory`, the browser build is missing (or the unit's `WorkingDirectory` is wrong). The working directory must be `/home/danutz/Development/dario`. Building `dario-server` alone does not create the browser game. Run `make deploy` from the Mac to install both, or build the missing files on the Pi:
+
+```sh
+cd ~/Development/dario
+rustup target add wasm32-unknown-unknown
+sh scripts/build-web.sh &&
+sudo systemctl reset-failed dario.service &&
+sudo systemctl restart dario.service &&
+systemctl status dario.service --no-pager
+```
+
+`reset-failed` clears the restart limit after repeated failures. The deployment installer also clears it before starting the service.
 
 ## Updates and port changes
 

@@ -65,6 +65,7 @@ fi
 install -m 0644 "$task_source/deploy/dario.service" "$task_unit"
 systemd-analyze verify "$task_unit"
 systemctl daemon-reload
+systemctl reset-failed dario.service
 systemctl enable --now dario.service
 systemctl is-enabled dario.service
 systemctl is-active dario.service
