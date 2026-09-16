@@ -2,6 +2,8 @@ mod art;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 mod sound;
+#[cfg(not(target_arch = "wasm32"))]
+mod storage;
 mod world;
 
 use macroquad::prelude::*;
@@ -55,7 +57,12 @@ fn launch(muted: bool, smoke: bool) {
 
 async fn run(muted: bool, smoke: bool) {
     let mut game = Game::new();
-    let mut audio = sound::Audio::new(muted).await;
+    #[cfg(not(target_arch = "wasm32"))]
+    let (mut storage, progress) = storage::Storage::load(smoke);
+    #[cfg(target_arch = "wasm32")]
+    let progress = dario_progress::Progress::default();
+    game.progress = progress;
+    let mut audio = sound::Audio::new(muted || game.progress.muted).await;
     let mut target = render_target(WIDTH as u32, HEIGHT as u32);
     target.texture.set_filter(FilterMode::Nearest);
     let mut accumulator = 0.0;
@@ -75,13 +82,14 @@ async fn run(muted: bool, smoke: bool) {
             break;
             #[cfg(target_arch = "wasm32")]
             {
-                game = Game::new();
+                game.phase = Phase::Title;
                 pending_jump = false;
                 accumulator = 0.0;
             }
         }
         if is_key_pressed(KeyCode::M) {
             audio.toggle();
+            game.progress.muted = audio.muted;
         }
         // Browser fullscreen must run directly in a trusted DOM input event.
         #[cfg(not(target_arch = "wasm32"))]
@@ -90,7 +98,11 @@ async fn run(muted: bool, smoke: bool) {
             set_fullscreen(fullscreen);
         }
         if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::P) {
-            game.toggle_pause();
+            if game.phase == Phase::LevelSelect {
+                game.phase = Phase::Title;
+            } else {
+                game.toggle_pause();
+            }
             pending_jump = false;
         }
         #[cfg(target_arch = "wasm32")]
@@ -98,11 +110,36 @@ async fn run(muted: bool, smoke: bool) {
             game.toggle_pause();
             pending_jump = false;
         }
-        if is_key_pressed(KeyCode::R)
-            || (is_key_pressed(KeyCode::Enter)
-                && matches!(game.phase, Phase::Title | Phase::Won | Phase::GameOver))
+        if is_key_pressed(KeyCode::L) {
+            game.select_levels();
+            pending_jump = false;
+        }
+        if game.phase == Phase::LevelSelect {
+            for (key, offset) in [
+                (KeyCode::Left, -1),
+                (KeyCode::Right, 1),
+                (KeyCode::Up, -4),
+                (KeyCode::Down, 4),
+            ] {
+                if is_key_pressed(key) {
+                    game.select_relative(offset);
+                }
+            }
+            if is_key_pressed(KeyCode::Enter) {
+                game.start_stage(game.selected_stage);
+            }
+        } else if is_key_pressed(KeyCode::R) {
+            game.start_stage(game.stage);
+            pending_jump = false;
+            accumulator = 0.0;
+        } else if is_key_pressed(KeyCode::Enter)
+            && matches!(game.phase, Phase::Title | Phase::Won | Phase::GameOver)
         {
-            game.start();
+            if game.phase == Phase::GameOver {
+                game.start_stage(game.stage);
+            } else {
+                game.start();
+            }
             pending_jump = false;
             accumulator = 0.0;
         }
@@ -157,6 +194,11 @@ async fn run(muted: bool, smoke: bool) {
             game.update(input, STEP);
             pending_jump = false;
             accumulator -= STEP;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            storage.sync(&game.progress, get_time());
+            game.save_notice = storage.notice;
         }
         audio.sync_music(game.phase == Phase::Playing);
         for event in game.sounds.drain(..) {

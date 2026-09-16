@@ -68,10 +68,15 @@ The game's [build script](build.rs) explicitly imports JavaScript-provided funct
 | Escape / P | Pause / resume |
 | M | Mute / unmute all audio |
 | F | Fullscreen / windowed |
-| R | Restart the adventure |
+| L | Choose an unlocked level |
+| R | Retry the current level |
 | Q | Quit |
 
 Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through a level mark your checkpoint. Coins are worth 100 points, beetles 200, and each finish 1,000. Dying preserves collected coins and used blocks; restarting begins a fresh run.
+
+Campaign clears unlock the next level permanently. Enter continues at the latest unlocked level; **L** opens level selection (arrows to select, Enter to play). Each level starts with three lives, and retrying keeps previously unlocked levels.
+
+Desktop progress and sound preferences save automatically to a versioned JSON file: `~/Library/Application Support/Dario/progress.json` on macOS, `%APPDATA%/Dario/progress.json` on Windows, or `$XDG_DATA_HOME/dario/progress.json` (default `~/.local/share/dario/progress.json`) on Linux. Set `DARIO_SAVE_PATH` to choose another file. Writes replace the previous file atomically. A damaged or unsupported save is preserved, and the game displays a guest-mode notice. Smoke tests never read or write player saves.
 
 ## The little details
 

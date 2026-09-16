@@ -26,6 +26,7 @@ pub fn update_status(game: &Game, muted: bool) {
         Phase::StageClear => 4,
         Phase::GameOver => 5,
         Phase::Won => 6,
+        Phase::LevelSelect => 7,
     };
     unsafe {
         dario_status(

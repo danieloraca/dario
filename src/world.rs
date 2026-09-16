@@ -1,5 +1,7 @@
+use dario_progress::Progress;
 use macroquad::prelude::{Rect, Vec2, vec2};
 
+pub const STAGE_COUNT: usize = 3;
 pub const WIDTH: f32 = 384.0;
 pub const HEIGHT: f32 = 240.0;
 pub const TILE: f32 = 16.0;
@@ -29,6 +31,7 @@ pub enum Phase {
     StageClear,
     GameOver,
     Won,
+    LevelSelect,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -303,6 +306,9 @@ pub struct Game {
     pub phase_time: f32,
     pub banner_time: f32,
     pub bumped: Option<(i32, i32, f32)>,
+    pub progress: Progress,
+    pub selected_stage: usize,
+    pub save_notice: Option<&'static str>,
 }
 
 impl Game {
@@ -323,13 +329,42 @@ impl Game {
             phase_time: 0.0,
             banner_time: 0.0,
             bumped: None,
+            progress: Progress::default(),
+            selected_stage: 0,
+            save_notice: None,
         }
     }
 
     pub fn start(&mut self) {
+        self.start_stage(self.progress.unlocked().min(STAGE_COUNT - 1));
+    }
+
+    pub fn start_stage(&mut self, stage: usize) {
+        if stage >= STAGE_COUNT || stage > self.progress.unlocked() {
+            return;
+        }
+        let progress = std::mem::take(&mut self.progress);
+        let notice = self.save_notice;
         *self = Self::new();
+        self.progress = progress;
+        self.save_notice = notice;
+        self.stage = stage;
+        self.selected_stage = stage;
+        self.level = Level::new(stage);
         self.phase = Phase::Playing;
         self.banner_time = 2.6;
+    }
+
+    pub fn select_levels(&mut self) {
+        self.selected_stage = self.progress.unlocked().min(STAGE_COUNT - 1);
+        self.phase = Phase::LevelSelect;
+    }
+
+    pub fn select_relative(&mut self, offset: isize) {
+        self.selected_stage = self
+            .selected_stage
+            .saturating_add_signed(offset)
+            .min(STAGE_COUNT - 1);
     }
 
     pub fn toggle_pause(&mut self) {
@@ -375,7 +410,10 @@ impl Game {
             return;
         }
         self.time += dt;
-        if matches!(self.phase, Phase::Title | Phase::Won | Phase::GameOver) {
+        if matches!(
+            self.phase,
+            Phase::Title | Phase::Won | Phase::GameOver | Phase::LevelSelect
+        ) {
             return;
         }
         self.phase_time += dt;
@@ -415,7 +453,7 @@ impl Game {
         }
         if self.phase == Phase::StageClear {
             if self.phase_time > 2.6 {
-                if self.stage == 2 {
+                if self.stage + 1 == STAGE_COUNT {
                     self.phase = Phase::Won;
                 } else {
                     self.stage += 1;
@@ -423,6 +461,7 @@ impl Game {
                     self.player = Player::new(vec2(56.0, 175.0));
                     self.camera = 0.0;
                     self.checkpoint = false;
+                    self.lives = 3;
                     self.particles.clear();
                     self.bumped = None;
                     self.phase = Phase::Playing;
@@ -598,6 +637,7 @@ impl Game {
         }
         if self.player.pos.x >= self.level.goal {
             self.score += 1000;
+            self.progress.levels[self.stage].cleared = true;
             self.phase = Phase::StageClear;
             self.phase_time = 0.0;
             self.sounds.push(SoundEvent::Clear);
@@ -727,6 +767,25 @@ mod tests {
         assert_eq!(game.lives, 2);
         assert!((game.player.pos.x - game.level.checkpoint.x).abs() < 1.0);
         assert!(game.player.invulnerable > 0.0);
+    }
+
+    #[test]
+    fn campaign_progress_survives_retries_and_continues_at_the_next_level() {
+        let mut game = Game::new();
+        game.start();
+        game.player.pos = vec2(game.level.goal, 130.0);
+        game.update(Input::default(), STEP);
+        assert!(game.progress.levels[0].cleared);
+        let saved = Progress::decode(&game.progress.encode()).unwrap();
+        let mut reopened = Game::new();
+        reopened.progress = saved;
+        reopened.start();
+        assert_eq!(reopened.stage, 1);
+        reopened.start_stage(2);
+        assert_eq!(reopened.stage, 1, "locked levels cannot start");
+        reopened.start_stage(0);
+        assert_eq!(reopened.stage, 0);
+        assert!(reopened.progress.levels[0].cleared);
     }
 
     #[test]

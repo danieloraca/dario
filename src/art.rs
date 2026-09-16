@@ -1,6 +1,6 @@
 use macroquad::prelude::*;
 
-use crate::world::{Game, HEIGHT, Phase, TILE, Tile, WIDTH};
+use crate::world::{Game, HEIGHT, Phase, STAGE_COUNT, TILE, Tile, WIDTH};
 
 const INK: Color = color_u8!(32, 53, 55, 255);
 const CREAM: Color = color_u8!(255, 246, 211, 255);
@@ -687,7 +687,18 @@ fn title(game: &Game, muted: bool, view: Vec2) {
         1.0,
         color_u8!(101, 136, 103, 255),
     );
-    centered("PRESS ENTER TO PLAY", 142.0 + dy, 1.0, CREAM, view.x);
+    centered(
+        if game.progress.levels[0].cleared {
+            "ENTER TO CONTINUE"
+        } else {
+            "PRESS ENTER TO PLAY"
+        },
+        142.0 + dy,
+        1.0,
+        CREAM,
+        view.x,
+    );
+    centered("L  CHOOSE LEVEL", 174.0 + dy, 1.0, INK, view.x);
     if (game.time * 2.0) as i32 % 2 == 0 {
         text(">", 102.0 + dx, 142.0 + dy, 1.0, GOLD);
     }
@@ -833,7 +844,9 @@ pub fn draw_world(game: &Game, view: Vec2, camera: f32) {
 }
 
 pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
-    if game.phase == Phase::Title {
+    if game.phase == Phase::LevelSelect {
+        level_select(game, view);
+    } else if game.phase == Phase::Title {
         title(game, muted, view);
     } else {
         hud(game, muted, view);
@@ -841,14 +854,14 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
             Phase::Paused => panel(
                 "TAKE A BREATHER",
                 "YOUR ADVENTURE CAN WAIT.",
-                "ESC / P  RESUME     R  RESTART",
+                "P RESUME   R RETRY   L LEVELS",
                 game,
                 view,
             ),
             Phase::GameOver => panel(
                 "ONE MORE TRY?",
                 "EVERY GREAT JUMP STARTS SOMEWHERE.",
-                "ENTER  PLAY AGAIN",
+                "ENTER RETRY    L LEVELS",
                 game,
                 view,
             ),
@@ -862,7 +875,7 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
             Phase::StageClear => panel(
                 "NICE RUN!",
                 game.level.name,
-                if game.stage == 2 {
+                if game.stage + 1 == STAGE_COUNT {
                     "HOME, SWEET HOME."
                 } else {
                     "ON TO THE NEXT ADVENTURE..."
@@ -873,4 +886,63 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
             _ => {}
         }
     }
+    if let Some(notice) = game.save_notice {
+        rect(0.0, view.y - 10.0, view.x, 10.0, INK);
+        centered(notice, view.y - 9.0, 1.0, GOLD, view.x);
+    }
+}
+
+fn level_select(game: &Game, view: Vec2) {
+    rect(0.0, 0.0, view.x, view.y, INK);
+    centered("CHOOSE YOUR LEVEL", 20.0, 2.0, GOLD, view.x);
+    let left = (view.x - 344.0) / 2.0;
+    for stage in 0..STAGE_COUNT {
+        let x = left + (stage % 4) as f32 * 88.0;
+        let y = 51.0 + (stage / 4) as f32 * 32.0;
+        let unlocked = stage <= game.progress.unlocked();
+        rect(
+            x,
+            y,
+            80.0,
+            27.0,
+            if stage == game.selected_stage {
+                GOLD
+            } else {
+                color_u8!(64, 85, 84, 255)
+            },
+        );
+        let label = if unlocked {
+            format!("1-{}", stage + 1)
+        } else {
+            "LOCKED".into()
+        };
+        text(
+            &label,
+            x + 8.0,
+            y + 5.0,
+            1.0,
+            if stage == game.selected_stage {
+                INK
+            } else {
+                CREAM
+            },
+        );
+        if game.progress.levels[stage].cleared {
+            text("CLEAR", x + 8.0, y + 16.0, 1.0, INK);
+        }
+    }
+    centered(
+        crate::world::Level::new(game.selected_stage).name,
+        187.0,
+        1.0,
+        CREAM,
+        view.x,
+    );
+    centered(
+        "ARROWS SELECT  ENTER PLAY  ESC BACK",
+        view.y - 20.0,
+        1.0,
+        CREAM,
+        view.x,
+    );
 }

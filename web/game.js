@@ -5,7 +5,7 @@
   const loading = document.getElementById("loading");
   const message = document.getElementById("loading-message");
   const retry = document.getElementById("retry");
-  const phases = ["title", "playing", "paused", "dying", "stage-clear", "game-over", "won"];
+  const phases = ["title", "playing", "paused", "dying", "stage-clear", "game-over", "won", "level-select"];
   let ready = false;
   let pauseRequested = false;
   let stopSound;
