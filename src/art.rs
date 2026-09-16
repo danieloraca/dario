@@ -1,3 +1,4 @@
+use crate::entities::EnemyKind;
 use macroquad::prelude::*;
 
 use crate::world::{Game, HEIGHT, Phase, STAGE_COUNT, TILE, Tile, WIDTH};
@@ -799,6 +800,78 @@ pub fn draw_world(game: &Game, view: Vec2, camera: f32) {
             );
         }
     }
+    for platform in &game.level.platforms {
+        let bounds = platform.rect();
+        if bounds.x + bounds.w < camera || bounds.x > camera + view.x || bounds.y > HEIGHT {
+            continue;
+        }
+        let x = bounds.x - camera;
+        if !platform.crumble {
+            rect(
+                platform.origin.x - camera - platform.travel.x,
+                platform.origin.y + 2.0,
+                platform.width + platform.travel.x * 2.0,
+                1.0,
+                color_u8!(92, 119, 125, 255),
+            );
+        }
+        let shaking = platform.touched.is_some_and(|time| time < 0.6);
+        let shift = if shaking {
+            (game.level.clock * 45.0).sin().signum()
+        } else {
+            0.0
+        };
+        rect(x + shift, bounds.y, bounds.w, 6.0, INK);
+        rect(
+            x + 1.0 + shift,
+            bounds.y,
+            bounds.w - 2.0,
+            2.0,
+            if platform.crumble { ORANGE } else { CREAM },
+        );
+        for n in 0..(bounds.w as i32 / 8) {
+            rect(
+                x + n as f32 * 8.0 + 2.0 + shift,
+                bounds.y + 3.0,
+                5.0,
+                2.0,
+                if platform.crumble {
+                    RED
+                } else {
+                    color_u8!(85, 165, 171, 255)
+                },
+            );
+        }
+    }
+    for jet in &game.level.fire {
+        let x = jet.pos.x - camera;
+        rect(x, jet.pos.y - 4.0, 16.0, 4.0, INK);
+        rect(
+            x + 3.0,
+            jet.pos.y - 3.0,
+            10.0,
+            2.0,
+            if jet.warning(game.level.clock) || jet.hot(game.level.clock) {
+                GOLD
+            } else {
+                RED
+            },
+        );
+        if jet.hot(game.level.clock) {
+            let flicker = (game.time * 30.0).sin() * 2.0;
+            rect(x + 2.0, jet.pos.y - 32.0, 12.0, 29.0, RED);
+            rect(
+                x + 4.0,
+                jet.pos.y - 30.0 + flicker,
+                8.0,
+                27.0 - flicker,
+                ORANGE,
+            );
+            rect(x + 6.0, jet.pos.y - 24.0, 4.0, 21.0, GOLD);
+        } else if jet.warning(game.level.clock) {
+            rect(x + 6.0, jet.pos.y - 10.0, 4.0, 5.0, GOLD);
+        }
+    }
     for enemy in &game.level.enemies {
         let x = enemy.pos.x - camera;
         let y = enemy.pos.y;
@@ -809,6 +882,14 @@ pub fn draw_world(game: &Game, view: Vec2, camera: f32) {
             rect(x, y + 9.0, 14.0, 3.0, RED);
             rect(x + 2.0, y + 9.0, 10.0, 1.0, ORANGE);
         } else {
+            if enemy.kind == EnemyKind::Hopper {
+                rect(x + 2.0, y - 7.0, 3.0, 8.0, CREAM);
+                rect(x + 9.0, y - 7.0, 3.0, 8.0, CREAM);
+            } else if enemy.kind == EnemyKind::Flyer {
+                let wing = (game.time * 20.0).sin() * 3.0;
+                rect(x - 6.0, y + wing, 8.0, 3.0, CREAM);
+                rect(x + 12.0, y - wing, 8.0, 3.0, CREAM);
+            }
             sprite(
                 &[
                     "....oooooo....",

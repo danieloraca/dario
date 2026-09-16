@@ -1,6 +1,7 @@
 mod art;
 #[cfg(target_arch = "wasm32")]
 mod browser;
+mod entities;
 mod sound;
 #[cfg(not(target_arch = "wasm32"))]
 mod storage;

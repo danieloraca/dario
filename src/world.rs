@@ -1,3 +1,4 @@
+use crate::entities::{Enemy, EnemyKind, FireJet, Platform};
 use dario_progress::Progress;
 use macroquad::prelude::{Rect, Vec2, vec2};
 
@@ -83,26 +84,6 @@ impl Player {
     }
 }
 
-pub struct Enemy {
-    pub pos: Vec2,
-    pub vel: Vec2,
-    pub squished: Option<f32>,
-}
-
-impl Enemy {
-    pub fn new(x: f32, y: f32) -> Self {
-        Self {
-            pos: vec2(x, y),
-            vel: vec2(-26.0, 0.0),
-            squished: None,
-        }
-    }
-
-    pub fn rect(&self) -> Rect {
-        Rect::new(self.pos.x, self.pos.y, 14.0, 12.0)
-    }
-}
-
 pub struct Coin {
     pub pos: Vec2,
     pub collected: bool,
@@ -123,6 +104,9 @@ pub struct Level {
     pub enemies: Vec<Enemy>,
     pub checkpoint: Vec2,
     pub goal: f32,
+    pub platforms: Vec<Platform>,
+    pub fire: Vec<FireJet>,
+    pub clock: f32,
 }
 
 impl Level {
@@ -152,6 +136,9 @@ impl Level {
             enemies: vec![],
             checkpoint: vec2(74.0 * TILE, 12.0 * TILE - PLAYER_H),
             goal: (width - 10) as f32 * TILE,
+            platforms: vec![],
+            fire: vec![],
+            clock: 0.0,
         };
         for x in 0..width {
             if !gaps.iter().any(|&(start, end)| (start..end).contains(&x)) {
@@ -248,6 +235,26 @@ impl Level {
             level
                 .enemies
                 .push(Enemy::new(x as f32 * TILE, surface as f32 * TILE - 12.0));
+        }
+        // A safe introduction to the new mechanics before the expanded worlds.
+        if stage == 1 {
+            level.platforms.push(Platform::moving(
+                67.0 * TILE,
+                8.0 * TILE,
+                3.0 * TILE,
+                vec2(24.0, 0.0),
+            ));
+            level.enemies[2].kind = EnemyKind::Hopper;
+        } else if stage == 2 {
+            level
+                .platforms
+                .push(Platform::crumbling(84.0 * TILE, 11.0 * TILE, 2.0 * TILE));
+            level
+                .enemies
+                .push(Enemy::of_kind(120.0 * TILE, 7.0 * TILE, EnemyKind::Flyer));
+            level
+                .fire
+                .push(FireJet::new(134.0 * TILE, 12.0 * TILE, 0.0));
         }
         level
     }
@@ -472,12 +479,46 @@ impl Game {
             return;
         }
 
+        self.move_platforms(dt);
         self.move_player(input, dt);
         self.move_enemies(dt);
         self.interact(input);
         let desired =
             (self.player.pos.x - 136.0).clamp(0.0, self.level.width as f32 * TILE - WIDTH);
         self.camera += (desired - self.camera) * (1.0 - (-8.0 * dt).exp());
+    }
+
+    fn move_platforms(&mut self, dt: f32) {
+        self.level.clock += dt;
+        let feet = self.player.pos.y + PLAYER_H;
+        let mut carry = Vec2::ZERO;
+        for platform in &mut self.level.platforms {
+            let riding = self.player.grounded
+                && platform.solid()
+                && (feet - platform.pos.y).abs() < 0.5
+                && self.player.pos.x + PLAYER_W > platform.pos.x
+                && self.player.pos.x < platform.pos.x + platform.width;
+            platform.step(dt);
+            if riding && platform.solid() {
+                carry = platform.pos - platform.previous;
+            }
+        }
+        self.player.pos.x += carry.x;
+        for (_, _, tile) in self.level.solids(self.player.rect()) {
+            if carry.x > 0.0 {
+                self.player.pos.x = tile.x - PLAYER_W;
+            } else if carry.x < 0.0 {
+                self.player.pos.x = tile.x + TILE;
+            }
+        }
+        self.player.pos.y += carry.y;
+        for (_, _, tile) in self.level.solids(self.player.rect()) {
+            if carry.y < 0.0 {
+                self.player.pos.y = tile.y + TILE;
+            } else if carry.y > 0.0 {
+                self.player.pos.y = tile.y - PLAYER_H;
+            }
+        }
     }
 
     fn move_player(&mut self, input: Input, dt: f32) {
@@ -520,6 +561,9 @@ impl Game {
             }
             p.vel.x = 0.0;
         }
+        let feet_before = p.pos.y + PLAYER_H;
+        let supported = p.grounded;
+        let descending = p.vel.y >= 0.0;
         p.pos.y += p.vel.y * dt;
         p.grounded = false;
         let mut hit = None;
@@ -532,6 +576,35 @@ impl Game {
                 hit = Some((x, y));
             }
             p.vel.y = 0.0;
+        }
+        let mut landing: Option<(usize, f32)> = None;
+        for (index, platform) in self.level.platforms.iter().enumerate() {
+            if platform.solid()
+                && descending
+                && (feet_before <= platform.previous.y + 0.5
+                    || (supported && (feet_before - platform.pos.y).abs() < 0.5))
+                && p.pos.y + PLAYER_H >= platform.pos.y
+                && p.pos.x + PLAYER_W > platform.pos.x
+                && p.pos.x < platform.pos.x + platform.width
+                && self
+                    .level
+                    .solids(Rect::new(
+                        p.pos.x,
+                        platform.pos.y - PLAYER_H,
+                        PLAYER_W,
+                        PLAYER_H,
+                    ))
+                    .is_empty()
+                && landing.is_none_or(|(_, top)| platform.pos.y < top)
+            {
+                landing = Some((index, platform.pos.y));
+            }
+        }
+        if let Some((index, top)) = landing {
+            p.pos.y = top - PLAYER_H;
+            p.vel.y = 0.0;
+            p.grounded = true;
+            self.level.platforms[index].land();
         }
         if let Some((x, y)) = hit {
             let kind = self.level.tile(x, y);
@@ -558,6 +631,20 @@ impl Game {
             if (enemy.pos.x - self.player.pos.x).abs() > WIDTH + 32.0 {
                 continue;
             }
+            enemy.clock += dt;
+            if enemy.kind == EnemyKind::Flyer {
+                enemy.pos = enemy.origin
+                    + vec2(
+                        (enemy.clock * 1.6).sin() * 28.0,
+                        (enemy.clock * 2.8).sin() * 12.0,
+                    );
+                enemy.vel.x = (enemy.clock * 1.6).cos() * 44.8;
+                continue;
+            }
+            if enemy.kind == EnemyKind::Hopper && enemy.clock >= 1.4 && enemy.vel.y == 0.0 {
+                enemy.vel.y = -205.0;
+                enemy.clock = 0.0;
+            }
             enemy.pos.x += enemy.vel.x * dt;
             if let Some((_, _, wall)) = self.level.solids(enemy.rect()).first() {
                 enemy.pos.x = if enemy.vel.x > 0.0 {
@@ -582,6 +669,9 @@ impl Game {
             for (_, _, floor) in self.level.solids(enemy.rect()) {
                 if enemy.vel.y > 0.0 {
                     enemy.pos.y = floor.y - 12.0;
+                    enemy.vel.y = 0.0;
+                } else if enemy.vel.y < 0.0 {
+                    enemy.pos.y = floor.y + TILE;
                     enemy.vel.y = 0.0;
                 }
             }
@@ -625,7 +715,13 @@ impl Game {
             self.sounds.push(SoundEvent::Stomp);
             self.burst(pos, false);
         }
-        if hurt || self.player.pos.y > HEIGHT + 28.0 {
+        let burned = self.player.invulnerable <= 0.0
+            && self
+                .level
+                .fire
+                .iter()
+                .any(|jet| jet.hot(self.level.clock) && player_rect.overlaps(&jet.rect()));
+        if hurt || burned || self.player.pos.y > HEIGHT + 28.0 {
             self.die();
             return;
         }
@@ -660,6 +756,88 @@ mod tests {
                 STEP,
             );
         }
+    }
+
+    #[test]
+    fn platforms_carry_riders_and_allow_jumping_through_from_below() {
+        for travel in [vec2(32.0, 0.0), vec2(0.0, 64.0)] {
+            let mut game = Game::new();
+            game.start();
+            game.level.enemies.clear();
+            game.level.tiles.fill(Tile::Air);
+            game.level.platforms = vec![Platform::moving(100.0, 100.0, 64.0, travel)];
+            game.player.pos = vec2(110.0, 100.0 - PLAYER_H);
+            game.player.grounded = true;
+            advance(&mut game, 120, Input::default());
+            let platform = &game.level.platforms[0];
+            assert!((game.player.pos.x - platform.pos.x - 10.0).abs() < 0.01);
+            assert!((game.player.pos.y + PLAYER_H - platform.pos.y).abs() < 0.01);
+            assert!(game.player.grounded);
+        }
+        let mut game = Game::new();
+        game.start();
+        game.level.enemies.clear();
+        game.level.platforms = vec![Platform::moving(40.0, 155.0, 60.0, Vec2::ZERO)];
+        advance(&mut game, 2, Input::default());
+        advance(
+            &mut game,
+            75,
+            Input {
+                jump_pressed: true,
+                jump_held: true,
+                ..Input::default()
+            },
+        );
+        assert_eq!(game.player.pos.y, 155.0 - PLAYER_H);
+        assert!(game.player.grounded);
+    }
+
+    #[test]
+    fn collapsing_floor_warns_then_drops_and_returns() {
+        let mut game = Game::new();
+        game.start();
+        game.level.enemies.clear();
+        game.level.platforms = vec![Platform::crumbling(40.0, 160.0, 64.0)];
+        game.player.pos = vec2(55.0, 140.0);
+        advance(&mut game, 36, Input::default());
+        assert!(game.level.platforms[0].touched.is_some());
+        assert!(game.player.grounded);
+        advance(&mut game, 80, Input::default());
+        assert!(!game.level.platforms[0].solid());
+        assert!(game.player.pos.y > 160.0 - PLAYER_H);
+        advance(&mut game, 290, Input::default());
+        assert!(game.level.platforms[0].solid());
+        assert_eq!(game.level.platforms[0].pos.y, 160.0);
+        assert_eq!(
+            game.player.pos.y, 175.0,
+            "a returning floor must not lift a player from below"
+        );
+    }
+
+    #[test]
+    fn new_enemies_move_and_fire_only_hurts_during_its_active_window() {
+        let mut game = Game::new();
+        game.start();
+        game.level.enemies = vec![
+            Enemy::of_kind(110.0, 180.0, EnemyKind::Hopper),
+            Enemy::of_kind(190.0, 100.0, EnemyKind::Flyer),
+        ];
+        advance(&mut game, 180, Input::default());
+        assert!(game.level.enemies[0].pos.y < 180.0);
+        assert!((game.level.enemies[1].pos.y - 100.0).abs() > 1.0);
+        game.level.enemies.clear();
+        game.level.fire = vec![FireJet::new(55.0, 192.0, 0.0)];
+        game.level.clock = 0.8;
+        game.update(Input::default(), STEP);
+        assert_eq!(game.phase, Phase::Playing);
+        game.toggle_pause();
+        let clock = game.level.clock;
+        advance(&mut game, 120, Input::default());
+        assert_eq!(game.level.clock, clock);
+        game.toggle_pause();
+        game.level.clock = 1.3;
+        game.update(Input::default(), STEP);
+        assert_eq!(game.phase, Phase::Dying);
     }
 
     #[test]
