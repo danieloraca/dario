@@ -117,9 +117,9 @@ fn text_width(label: &str, size: f32) -> f32 {
     (label.chars().count() as f32 * GLYPH_ADVANCE as f32 - 1.0).max(0.0) * size
 }
 
-fn centered(label: &str, y: f32, size: f32, color: Color) {
+fn centered(label: &str, y: f32, size: f32, color: Color, view_width: f32) {
     let width = text_width(label, size);
-    text(label, (WIDTH - width) / 2.0, y, size, color);
+    text(label, (view_width - width) / 2.0, y, size, color);
 }
 
 fn cloud(x: f32, y: f32, size: f32, color: Color) {
@@ -155,7 +155,7 @@ fn hill(x: f32, base: f32, radius: f32, height: f32, color: Color) {
     }
 }
 
-fn background(game: &Game) {
+fn background(game: &Game, view: Vec2, camera: f32) {
     let (sky, horizon, far, near, sun) = match game.stage {
         0 => (
             color_u8!(112, 190, 186, 255),
@@ -180,38 +180,47 @@ fn background(game: &Game) {
         ),
     };
     clear_background(sky);
-    for row in 0..24 {
-        let blend = row as f32 / 23.0;
+    let extra_height = view.y - HEIGHT;
+    let rows = 24 + (extra_height / 7.0).ceil() as i32;
+    for row in 0..rows {
+        let blend = row as f32 / (rows - 1) as f32;
         let color = Color::new(
             sky.r + (horizon.r - sky.r) * blend,
             sky.g + (horizon.g - sky.g) * blend,
             sky.b + (horizon.b - sky.b) * blend,
             1.0,
         );
-        rect(0.0, 32.0 + row as f32 * 7.0, WIDTH, 7.0, color);
+        rect(
+            0.0,
+            32.0 - extra_height + row as f32 * 7.0,
+            view.x,
+            7.0,
+            color,
+        );
     }
-    let sun_x = 309.0 - game.camera * 0.025;
+    let sun_x = view.x - 75.0 - camera * 0.025;
     for y in -19_i32..20 {
         let half = (20.0_f32.powi(2) - (y as f32).powi(2)).sqrt();
         rect(
             sun_x - half,
-            69.0 + y as f32,
+            69.0 - extra_height * 0.65 + y as f32,
             (half * 2.0).floor(),
             1.0,
             sun,
         );
     }
-    for i in -1_i32..7 {
-        let x = (i as f32 * 113.0 - game.camera * 0.12 - game.time * 1.2).rem_euclid(760.0) - 80.0;
+    let cloud_span = (view.x + 160.0).max(760.0);
+    for i in -1_i32..(cloud_span / 113.0).ceil() as i32 {
+        let x = (i as f32 * 113.0 - camera * 0.12 - game.time * 1.2).rem_euclid(cloud_span) - 80.0;
         cloud(
             x,
-            46.0 + (i * 37).rem_euclid(43) as f32,
+            46.0 + (i * 37).rem_euclid(43) as f32 - extra_height * i.rem_euclid(3) as f32 / 3.0,
             if i % 2 == 0 { 1.0 } else { 0.75 },
             Color::new(CREAM.r, CREAM.g, CREAM.b, 0.64),
         );
     }
-    for i in -1_i32..6 {
-        let x = i as f32 * 155.0 - (game.camera * 0.22).rem_euclid(155.0);
+    for i in -1_i32..(view.x / 155.0).ceil() as i32 + 1 {
+        let x = i as f32 * 155.0 - (camera * 0.22).rem_euclid(155.0);
         hill(
             x + 55.0,
             194.0,
@@ -220,8 +229,8 @@ fn background(game: &Game) {
             far,
         );
     }
-    for i in -1_i32..7 {
-        let x = i as f32 * 105.0 - (game.camera * 0.43).rem_euclid(105.0);
+    for i in -1_i32..(view.x / 105.0).ceil() as i32 + 1 {
+        let x = i as f32 * 105.0 - (camera * 0.43).rem_euclid(105.0);
         hill(
             x + 30.0,
             197.0,
@@ -245,10 +254,10 @@ fn background(game: &Game) {
         );
     }
     if game.stage == 2 {
-        for i in 0..16 {
-            let x = (i * 73 + 27) % 384;
-            let y = 36 + (i * 31) % 70;
-            rect(x as f32, y as f32, 1.0, 2.0, CREAM);
+        for i in 0..(view.x / 24.0).ceil() as i32 {
+            let x = (i * 73 + 27) % view.x as i32;
+            let y = 36.0 + (i * 31) as f32 % (70.0 + extra_height) - extra_height;
+            rect(x as f32, y, 1.0, 2.0, CREAM);
         }
     }
 }
@@ -413,12 +422,12 @@ fn sprite(rows: &[&str], x: f32, y: f32, facing: f32) {
     }
 }
 
-fn player(game: &Game) {
+fn player(game: &Game, camera: f32) {
     let p = &game.player;
     if p.invulnerable > 0.0 && (game.time * 12.0) as i32 % 2 == 0 {
         return;
     }
-    let x = (p.pos.x - game.camera - 2.0).round();
+    let x = (p.pos.x - camera - 2.0).round();
     let y = (p.pos.y - 1.0).round();
     sprite(
         &[
@@ -453,10 +462,9 @@ fn player(game: &Game) {
     sprite(legs, x, y + 14.0, p.facing);
 }
 
-fn scenery(game: &Game) {
-    let camera = game.camera;
+fn scenery(game: &Game, width: f32, camera: f32) {
     let start = (camera / TILE) as i32 - 1;
-    let end = start + 27;
+    let end = start + (width / TILE).ceil() as i32 + 3;
     for tx in start..end {
         if game.level.tile(tx, 12) == Tile::Ground {
             let x = tx as f32 * TILE - camera;
@@ -551,31 +559,74 @@ fn heart(x: f32, y: f32, full: bool) {
     }
 }
 
-fn hud(game: &Game, muted: bool) {
-    rect(0.0, 0.0, WIDTH, 31.0, INK);
-    rect(0.0, 30.0, WIDTH, 1.0, color_u8!(66, 91, 78, 255));
+fn hud(game: &Game, muted: bool, view: Vec2) {
+    let extra = view.x - WIDTH;
+    rect(0.0, 0.0, view.x, 31.0, INK);
+    rect(0.0, 30.0, view.x, 1.0, color_u8!(66, 91, 78, 255));
     text("DARIO", 12.0, 7.0, 1.0, CREAM);
     for i in 0..3 {
         heart(12.0 + i as f32 * 11.0, 18.0, i < game.lives);
     }
-    coin(88.0, 11.0, 0.0);
-    text(&format!("{:02}", game.coins), 101.0, 13.0, 1.0, GOLD);
-    text("SCORE", 148.0, 6.0, 1.0, color_u8!(156, 184, 160, 255));
-    text(&format!("{:06}", game.score), 148.0, 18.0, 1.0, CREAM);
-    text("WORLD", 217.0, 6.0, 1.0, color_u8!(156, 184, 160, 255));
-    text(&format!("1-{}", game.stage + 1), 225.0, 18.0, 1.0, CREAM);
+    coin(88.0 + extra * 0.2, 11.0, 0.0);
+    text(
+        &format!("{:02}", game.coins),
+        101.0 + extra * 0.2,
+        13.0,
+        1.0,
+        GOLD,
+    );
+    text(
+        "SCORE",
+        148.0 + extra * 0.4,
+        6.0,
+        1.0,
+        color_u8!(156, 184, 160, 255),
+    );
+    text(
+        &format!("{:06}", game.score),
+        148.0 + extra * 0.4,
+        18.0,
+        1.0,
+        CREAM,
+    );
+    text(
+        "WORLD",
+        217.0 + extra * 0.6,
+        6.0,
+        1.0,
+        color_u8!(156, 184, 160, 255),
+    );
+    text(
+        &format!("1-{}", game.stage + 1),
+        225.0 + extra * 0.6,
+        18.0,
+        1.0,
+        CREAM,
+    );
     text(
         if muted { "M / OFF" } else { "M / ON" },
-        280.0,
+        280.0 + extra * 0.8,
         13.0,
         1.0,
         CREAM,
     );
-    text("II", 354.0, 13.0, 1.0, CREAM);
-    rect(0.0, 232.0, WIDTH, 8.0, INK);
+    text("II", view.x - 30.0, 13.0, 1.0, CREAM);
+    rect(0.0, view.y - 8.0, view.x, 8.0, INK);
     let progress = (game.player.pos.x / game.level.goal).clamp(0.0, 1.0);
-    rect(12.0, 235.0, 360.0, 2.0, color_u8!(76, 101, 81, 255));
-    rect(12.0, 235.0, (360.0 * progress).max(2.0), 2.0, GOLD);
+    rect(
+        12.0,
+        view.y - 5.0,
+        view.x - 24.0,
+        2.0,
+        color_u8!(76, 101, 81, 255),
+    );
+    rect(
+        12.0,
+        view.y - 5.0,
+        ((view.x - 24.0) * progress).max(2.0),
+        2.0,
+        GOLD,
+    );
     if game.banner_time > 0.0 && game.phase == Phase::Playing {
         let label = if game.checkpoint {
             "CHECKPOINT!"
@@ -583,82 +634,130 @@ fn hud(game: &Game, muted: bool) {
             game.level.name
         };
         let width = text_width(label, 1.0) + 20.0;
-        rect((WIDTH - width) / 2.0, 43.0, width, 19.0, INK);
-        centered(label, 49.0, 1.0, CREAM);
+        rect((view.x - width) / 2.0, 43.0, width, 19.0, INK);
+        centered(label, 49.0, 1.0, CREAM, view.x);
     }
 }
 
-fn title(game: &Game, muted: bool) {
+fn title(game: &Game, muted: bool, view: Vec2) {
+    let dx = (view.x - WIDTH) / 2.0;
+    let dy = (view.y - HEIGHT) / 2.0;
     text("DARIO / 01", 13.0, 12.0, 1.0, INK);
     let credit = "A RUST ORIGINAL";
     text(
         credit,
-        WIDTH - 13.0 - text_width(credit, 1.0),
+        view.x - 13.0 - text_width(credit, 1.0),
         12.0,
         1.0,
         INK,
     );
-    centered("SMALL GAME. BIG LITTLE ADVENTURE.", 38.0, 1.0, INK);
+    centered(
+        "SMALL GAME. BIG LITTLE ADVENTURE.",
+        38.0 + dy,
+        1.0,
+        INK,
+        view.x,
+    );
     // Chunky, offset lettering is drawn with the same hand-made bitmap alphabet.
-    let x = (WIDTH - text_width("DARIO", 7.0)) / 2.0;
-    for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 7.0), (3.0, 5.0)] {
-        text("DARIO", x + dx, 57.0 + dy, 7.0, INK);
+    let x = (view.x - text_width("DARIO", 7.0)) / 2.0;
+    for (sx, sy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 7.0), (3.0, 5.0)] {
+        text("DARIO", x + sx, 57.0 + dy + sy, 7.0, INK);
     }
-    text("DARIO", x, 61.0, 7.0, RED);
-    text("DARIO", x, 57.0, 7.0, GOLD);
-    centered("A LITTLE RUST. A LOT OF JUMP.", 119.0, 1.0, INK);
-    rect(94.0, 137.0, 200.0, 23.0, color_u8!(43, 80, 67, 255));
-    rect(92.0, 134.0, 200.0, 23.0, INK);
-    rect(93.0, 135.0, 198.0, 1.0, color_u8!(101, 136, 103, 255));
-    centered("PRESS ENTER TO PLAY", 142.0, 1.0, CREAM);
+    text("DARIO", x, 61.0 + dy, 7.0, RED);
+    text("DARIO", x, 57.0 + dy, 7.0, GOLD);
+    centered(
+        "A LITTLE RUST. A LOT OF JUMP.",
+        119.0 + dy,
+        1.0,
+        INK,
+        view.x,
+    );
+    rect(
+        94.0 + dx,
+        137.0 + dy,
+        200.0,
+        23.0,
+        color_u8!(43, 80, 67, 255),
+    );
+    rect(92.0 + dx, 134.0 + dy, 200.0, 23.0, INK);
+    rect(
+        93.0 + dx,
+        135.0 + dy,
+        198.0,
+        1.0,
+        color_u8!(101, 136, 103, 255),
+    );
+    centered("PRESS ENTER TO PLAY", 142.0 + dy, 1.0, CREAM, view.x);
     if (game.time * 2.0) as i32 % 2 == 0 {
-        text(">", 102.0, 142.0, 1.0, GOLD);
+        text(">", 102.0 + dx, 142.0 + dy, 1.0, GOLD);
     }
-    rect(0.0, 202.0, WIDTH, 38.0, INK);
-    rect(0.0, 201.0, WIDTH, 1.0, color_u8!(94, 129, 94, 255));
-    centered("ARROWS / A D  MOVE     SPACE / Z  JUMP", 210.0, 1.0, CREAM);
+    rect(0.0, view.y - 38.0, view.x, 38.0, INK);
+    rect(0.0, view.y - 39.0, view.x, 1.0, color_u8!(94, 129, 94, 255));
+    centered(
+        "ARROWS / A D  MOVE     SPACE / Z  JUMP",
+        view.y - 30.0,
+        1.0,
+        CREAM,
+        view.x,
+    );
     centered(
         if muted {
             "SHIFT  RUN    M  SOUND OFF    F  FULLSCREEN"
         } else {
             "SHIFT  RUN    M  SOUND ON     F  FULLSCREEN"
         },
-        224.0,
+        view.y - 16.0,
         1.0,
         color_u8!(166, 189, 156, 255),
+        view.x,
     );
 }
 
-fn panel(title: &str, subtitle: &str, action: &str, game: &Game) {
+fn panel(title: &str, subtitle: &str, action: &str, game: &Game, view: Vec2) {
+    let dx = (view.x - WIDTH) / 2.0;
+    let dy = (view.y - HEIGHT) / 2.0;
     rect(
         0.0,
         31.0,
-        WIDTH,
-        HEIGHT - 31.0,
+        view.x,
+        view.y - 31.0,
         Color::new(0.06, 0.12, 0.13, 0.62),
     );
-    rect(47.0, 66.0, 294.0, 120.0, Color::new(0.04, 0.08, 0.08, 0.4));
-    rect(44.0, 62.0, 294.0, 120.0, INK);
-    rect(45.0, 63.0, 292.0, 1.0, color_u8!(136, 161, 124, 255));
-    centered(title, 82.0, 2.0, GOLD);
-    centered(subtitle, 110.0, 1.0, CREAM);
+    rect(
+        47.0 + dx,
+        66.0 + dy,
+        294.0,
+        120.0,
+        Color::new(0.04, 0.08, 0.08, 0.4),
+    );
+    rect(44.0 + dx, 62.0 + dy, 294.0, 120.0, INK);
+    rect(
+        45.0 + dx,
+        63.0 + dy,
+        292.0,
+        1.0,
+        color_u8!(136, 161, 124, 255),
+    );
+    centered(title, 82.0 + dy, 2.0, GOLD, view.x);
+    centered(subtitle, 110.0 + dy, 1.0, CREAM, view.x);
     if matches!(game.phase, Phase::Won | Phase::GameOver) {
         centered(
             &format!("{:02} COINS    {:06} POINTS", game.coins, game.score),
-            130.0,
+            130.0 + dy,
             1.0,
             color_u8!(166, 189, 156, 255),
+            view.x,
         );
     }
-    centered(action, 157.0, 1.0, CREAM);
+    centered(action, 157.0 + dy, 1.0, CREAM, view.x);
 }
 
-pub fn draw(game: &Game, muted: bool) {
-    background(game);
-    scenery(game);
-    let start = (game.camera / TILE).floor() as i32 - 1;
+pub fn draw_world(game: &Game, view: Vec2, camera: f32) {
+    background(game, view, camera);
+    scenery(game, view.x, camera);
+    let start = (camera / TILE).floor() as i32 - 1;
     for y in 0..15 {
-        for x in start..start + 27 {
+        for x in start..start + (view.x / TILE).ceil() as i32 + 3 {
             let mut py = y as f32 * TILE;
             if let Some((bx, by, timer)) = game.bumped
                 && bx == x
@@ -671,15 +770,15 @@ pub fn draw(game: &Game, muted: bool) {
                 game.level.tile(x, y),
                 x,
                 y,
-                x as f32 * TILE - game.camera,
+                x as f32 * TILE - camera,
                 py,
             );
         }
     }
     for c in &game.level.coins {
-        let x = c.pos.x - game.camera;
+        let x = c.pos.x - camera;
         if !c.collected
-            && (-12.0..WIDTH).contains(&x)
+            && (-12.0..view.x).contains(&x)
             && (game.phase != Phase::Title || c.pos.y > 160.0)
         {
             coin(
@@ -690,9 +789,9 @@ pub fn draw(game: &Game, muted: bool) {
         }
     }
     for enemy in &game.level.enemies {
-        let x = enemy.pos.x - game.camera;
+        let x = enemy.pos.x - camera;
         let y = enemy.pos.y;
-        if !(-16.0..WIDTH).contains(&x) {
+        if !(-16.0..view.x).contains(&x) {
             continue;
         }
         if enemy.squished.is_some() {
@@ -721,38 +820,44 @@ pub fn draw(game: &Game, muted: bool) {
             rect(x + 9.0 - step, y + 10.0, 4.0, 2.0, INK);
         }
     }
-    player(game);
+    player(game, camera);
     for p in &game.particles {
         rect(
-            p.pos.x - game.camera,
+            p.pos.x - camera,
             p.pos.y,
             2.0,
             2.0,
             if p.gold { GOLD } else { CREAM },
         );
     }
+}
+
+pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
     if game.phase == Phase::Title {
-        title(game, muted);
+        title(game, muted, view);
     } else {
-        hud(game, muted);
+        hud(game, muted, view);
         match game.phase {
             Phase::Paused => panel(
                 "TAKE A BREATHER",
                 "YOUR ADVENTURE CAN WAIT.",
                 "ESC / P  RESUME     R  RESTART",
                 game,
+                view,
             ),
             Phase::GameOver => panel(
                 "ONE MORE TRY?",
                 "EVERY GREAT JUMP STARTS SOMEWHERE.",
                 "ENTER  PLAY AGAIN",
                 game,
+                view,
             ),
             Phase::Won => panel(
                 "YOU DID IT!",
                 "THREE WORLDS. ONE LITTLE LEGEND.",
                 "ENTER  PLAY AGAIN",
                 game,
+                view,
             ),
             Phase::StageClear => panel(
                 "NICE RUN!",
@@ -763,6 +868,7 @@ pub fn draw(game: &Game, muted: bool) {
                     "ON TO THE NEXT ADVENTURE..."
                 },
                 game,
+                view,
             ),
             _ => {}
         }

@@ -56,10 +56,8 @@ fn launch(muted: bool, smoke: bool) {
 async fn run(muted: bool, smoke: bool) {
     let mut game = Game::new();
     let mut audio = sound::Audio::new(muted).await;
-    let target = render_target(WIDTH as u32, HEIGHT as u32);
+    let mut target = render_target(WIDTH as u32, HEIGHT as u32);
     target.texture.set_filter(FilterMode::Nearest);
-    let mut camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, WIDTH, HEIGHT));
-    camera.render_target = Some(target.clone());
     let mut accumulator = 0.0;
     let mut pending_jump = false;
     #[cfg(not(target_arch = "wasm32"))]
@@ -165,14 +163,36 @@ async fn run(muted: bool, smoke: bool) {
             audio.play(event);
         }
 
+        let screen = vec2(screen_width().max(1.0), screen_height().max(1.0));
+        let fit = (screen.x / WIDTH).min(screen.y / HEIGHT);
+        #[cfg(target_arch = "wasm32")]
+        let view = vec2((screen.x / fit).ceil(), (screen.y / fit).ceil());
+        #[cfg(not(target_arch = "wasm32"))]
+        let view = vec2(WIDTH, HEIGHT);
+        if target.texture.width() != view.x || target.texture.height() != view.y {
+            target = render_target(view.x as u32, view.y as u32);
+            target.texture.set_filter(FilterMode::Nearest);
+        }
+        // Extra browser space reveals more world; sprites keep their proportions.
+        let mut camera =
+            Camera2D::from_display_rect(Rect::new(0.0, HEIGHT - view.y, view.x, view.y));
+        camera.render_target = Some(target.clone());
         set_camera(&camera);
-        art::draw(&game, audio.muted);
+        let camera_x = (game.camera - (view.x - WIDTH) * 136.0 / WIDTH).clamp(
+            0.0,
+            (game.level.width as f32 * world::TILE - view.x).max(0.0),
+        );
+        art::draw_world(&game, view, camera_x);
+        camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, view.x, view.y));
+        camera.render_target = Some(target.clone());
+        set_camera(&camera);
+        art::draw_ui(&game, audio.muted, view);
         set_default_camera();
         clear_background(color_u8!(20, 32, 35, 255));
-        let fit = (screen_width() / WIDTH).min(screen_height() / HEIGHT);
-        // Integer scaling keeps the pixel grid crisp, with a fractional fallback for tiny windows.
-        let scale = if fit >= 1.0 { fit.floor() } else { fit };
-        let size = vec2(WIDTH * scale, HEIGHT * scale);
+        #[cfg(target_arch = "wasm32")]
+        let size = screen;
+        #[cfg(not(target_arch = "wasm32"))]
+        let size = view * if fit >= 1.0 { fit.floor() } else { fit };
         draw_texture_ex(
             &target.texture,
             ((screen_width() - size.x) / 2.0).floor(),

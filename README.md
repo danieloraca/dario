@@ -34,7 +34,7 @@ sh scripts/serve-web.sh
 
 Open [Dario in your browser](http://127.0.0.1:8080) and press Enter. To use another port, run `sh scripts/serve-web.sh 8081`. Stop the server with Ctrl+C. Rerun the command after editing Rust or web files to rebuild; there is no hot reload.
 
-A keyboard is required. The controls below also work in the browser; **Q returns to the title screen** there. Audio unlocks on your first keypress or click. Leaving the tab pauses the game and silences its audio; press P to resume. Fullscreen uses the browser's permission rules.
+A keyboard is required. The game fills the browser window and adapts as you resize it, revealing more scenery while keeping the pixel art in proportion. The controls below also work in the browser; **Q returns to the title screen** there. Audio unlocks on your first keypress or click. Leaving the tab pauses the game and silences its audio; press P to resume. Press **F** for fullscreen, which uses the browser's permission rules.
 
 For a Raspberry Pi that serves the game on port 3041 and starts it automatically after reboot, use the [systemd deployment guide](deploy/README.md) and [Dario service file](deploy/dario.service). The service runs `target/release/dario-server` from `~/Development/dario`, with `DARIO_ADDR=0.0.0.0:3041`, matching the existing Solitaire service layout.
 
@@ -76,7 +76,7 @@ Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through
 ## The little details
 
 - Three handmade stages: **Sunny Side Up**, **The Golden Hour**, and **One More Sunset**.
-- A 384 × 240 canvas, nearest-neighbor integer scaling, parallax hills, animated coins, and a bold, homemade 7×7 arcade alphabet.
+- A 384 × 240 base canvas, an expanding browser viewport, nearest-neighbor scaling (integer scaling on desktop), parallax hills, animated coins, and a bold, homemade 7×7 arcade alphabet.
 - Fixed 120 Hz physics, acceleration, variable jump height, a small grace period after leaving ledges, and buffered jumps just before landing.
 - An original 16-bar chiptune with pulse-wave melody, triangle bass, arpeggios, and synthesized noise drums. Seven synthesized effects cover jumping, coins, bumps, stomps, damage, checkpoints, and finishes.
 - All sprites, music, and sound effects are generated in Rust. No Nintendo artwork, recordings, or music are included.
