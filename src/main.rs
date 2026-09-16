@@ -9,7 +9,7 @@ mod storage;
 mod world;
 
 use macroquad::prelude::*;
-use world::{Game, HEIGHT, Input, Phase, STEP, WIDTH};
+use world::{Game, HEIGHT, Input, Mode, Phase, STEP, WIDTH};
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
@@ -124,6 +124,20 @@ async fn run(muted: bool, smoke: bool) {
             game.select_levels();
             pending_jump = false;
         }
+        if is_key_pressed(KeyCode::T) {
+            if game.phase == Phase::LevelSelect {
+                game.toggle_trial();
+            } else if matches!(game.phase, Phase::Title | Phase::Won | Phase::GameOver) {
+                game.select_time_trial();
+            }
+        }
+        if is_key_pressed(KeyCode::C)
+            && matches!(game.phase, Phase::Title | Phase::Won | Phase::GameOver)
+        {
+            game.start_arcade();
+            pending_jump = false;
+            accumulator = 0.0;
+        }
         if game.phase == Phase::LevelSelect {
             for (key, offset) in [
                 (KeyCode::Left, -1),
@@ -135,21 +149,13 @@ async fn run(muted: bool, smoke: bool) {
                     game.select_relative(offset);
                 }
             }
-            if is_key_pressed(KeyCode::Enter) {
-                game.start_stage(game.selected_stage);
-            }
-        } else if is_key_pressed(KeyCode::R) {
-            game.start_stage(game.stage);
+        }
+        if is_key_pressed(KeyCode::R) && game.phase != Phase::LevelSelect {
+            game.retry();
             pending_jump = false;
             accumulator = 0.0;
-        } else if is_key_pressed(KeyCode::Enter)
-            && matches!(game.phase, Phase::Title | Phase::Won | Phase::GameOver)
-        {
-            if game.phase == Phase::GameOver {
-                game.start_stage(game.stage);
-            } else {
-                game.start();
-            }
+        } else if is_key_pressed(KeyCode::Enter) {
+            game.confirm();
             pending_jump = false;
             accumulator = 0.0;
         }
@@ -214,7 +220,16 @@ async fn run(muted: bool, smoke: bool) {
                     game.start_stage(0);
                     game.player.pos = vec2(game.level.goal, 130.0);
                 }
-                116 => break,
+                116 => {
+                    game.mode = Mode::TimeTrial;
+                    game.start_stage(0);
+                    game.player.pos = vec2(game.level.goal, 130.0);
+                }
+                118 => {
+                    game.start_arcade();
+                    game.toggle_pause();
+                }
+                120 => break,
                 _ => {}
             }
             input.axis = if (2..102).contains(&frame) { 1.0 } else { 0.0 };
@@ -251,7 +266,14 @@ async fn run(muted: bool, smoke: bool) {
         let screen = vec2(screen_width().max(1.0), screen_height().max(1.0));
         let fit = (screen.x / WIDTH).min(screen.y / HEIGHT);
         #[cfg(target_arch = "wasm32")]
-        let view = vec2((screen.x / fit).ceil(), (screen.y / fit).ceil());
+        let responsive =
+            game.mode == Mode::Campaign || matches!(game.phase, Phase::Title | Phase::LevelSelect);
+        #[cfg(target_arch = "wasm32")]
+        let view = if responsive {
+            vec2((screen.x / fit).ceil(), (screen.y / fit).ceil())
+        } else {
+            vec2(WIDTH, HEIGHT)
+        };
         #[cfg(not(target_arch = "wasm32"))]
         let view = vec2(WIDTH, HEIGHT);
         if target.texture.width() != view.x || target.texture.height() != view.y {
@@ -275,7 +297,7 @@ async fn run(muted: bool, smoke: bool) {
         set_default_camera();
         clear_background(color_u8!(20, 32, 35, 255));
         #[cfg(target_arch = "wasm32")]
-        let size = screen;
+        let size = if responsive { screen } else { view * fit };
         #[cfg(not(target_arch = "wasm32"))]
         let size = view * if fit >= 1.0 { fit.floor() } else { fit };
         draw_texture_ex(
@@ -293,6 +315,9 @@ async fn run(muted: bool, smoke: bool) {
         {
             let status = (
                 game.phase,
+                game.mode,
+                game.elapsed_ms() / 1000,
+                game.challenge_count(),
                 game.stage,
                 game.selected_stage,
                 game.coins,
@@ -315,6 +340,8 @@ async fn run(muted: bool, smoke: bool) {
                 111 => Some("victory"),
                 113 => Some("level-select"),
                 115 => Some("results"),
+                117 => Some("trial-results"),
+                119 => Some("arcade-paused"),
                 _ => None,
             };
             if let Some(name) = screenshot {

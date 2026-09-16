@@ -36,6 +36,13 @@ pub enum Phase {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    Campaign,
+    TimeTrial,
+    Arcade,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SoundEvent {
     Jump,
     Coin,
@@ -279,6 +286,7 @@ pub fn time_label(millis: u64) -> String {
 
 pub struct Game {
     pub phase: Phase,
+    pub mode: Mode,
     pub stage: usize,
     pub level: Level,
     pub player: Player,
@@ -305,6 +313,7 @@ impl Game {
     pub fn new() -> Self {
         Self {
             phase: Phase::Title,
+            mode: Mode::Campaign,
             stage: 0,
             level: Level::new(0),
             player: Player::new(vec2(56.0, 175.0)),
@@ -341,18 +350,25 @@ impl Game {
     }
 
     pub fn start(&mut self) {
+        self.mode = Mode::Campaign;
         self.start_stage(self.progress.unlocked().min(STAGE_COUNT - 1));
     }
 
     pub fn start_stage(&mut self, stage: usize) {
-        if stage >= STAGE_COUNT || stage > self.progress.unlocked() {
+        if stage >= STAGE_COUNT
+            || stage > self.progress.unlocked()
+            || (self.mode == Mode::Arcade && stage != 0)
+        {
             return;
         }
         let progress = std::mem::take(&mut self.progress);
         let notice = self.save_notice;
+        let mode = self.mode;
         *self = Self::new();
         self.progress = progress;
         self.save_notice = notice;
+        self.mode = mode;
+        self.lives = if mode == Mode::TimeTrial { 1 } else { 3 };
         self.stage = stage;
         self.selected_stage = stage;
         self.level = Level::new(stage);
@@ -360,7 +376,50 @@ impl Game {
         self.banner_time = 2.6;
     }
 
+    pub fn start_arcade(&mut self) {
+        self.mode = Mode::Arcade;
+        self.start_stage(0);
+    }
+
+    pub fn select_time_trial(&mut self) {
+        self.mode = Mode::TimeTrial;
+        self.select_levels();
+    }
+
+    pub fn toggle_trial(&mut self) {
+        if self.phase == Phase::LevelSelect {
+            self.mode = if self.mode == Mode::TimeTrial {
+                Mode::Campaign
+            } else {
+                Mode::TimeTrial
+            };
+        }
+    }
+
+    pub fn retry(&mut self) {
+        self.start_stage(if self.mode == Mode::Arcade {
+            0
+        } else {
+            self.stage
+        });
+    }
+
+    pub fn confirm(&mut self) {
+        match self.phase {
+            Phase::LevelSelect => self.start_stage(self.selected_stage),
+            Phase::Title | Phase::Won => self.start(),
+            Phase::GameOver => self.retry(),
+            Phase::StageClear if self.mode == Mode::TimeTrial => self.retry(),
+            _ => {}
+        }
+    }
+
     pub fn select_levels(&mut self) {
+        // Entering the course picker abandons an Arcade run; Arcade can only
+        // start at 1-1. Time Trial keeps its selected mode when returning here.
+        if self.mode == Mode::Arcade {
+            self.mode = Mode::Campaign;
+        }
         self.selected_stage = self.progress.unlocked().min(STAGE_COUNT - 1);
         self.phase = Phase::LevelSelect;
     }
@@ -446,6 +505,9 @@ impl Game {
             if self.phase_time > 1.25 {
                 if self.lives == 0 {
                     self.phase = Phase::GameOver;
+                    if self.mode == Mode::Arcade {
+                        self.progress.arcade_best = self.progress.arcade_best.max(self.score);
+                    }
                 } else {
                     let spawn = if self.checkpoint {
                         self.level.checkpoint
@@ -462,7 +524,7 @@ impl Game {
             return;
         }
         if self.phase == Phase::StageClear {
-            if self.phase_time > 2.6 {
+            if self.mode != Mode::TimeTrial && self.phase_time > 2.6 {
                 if self.stage + 1 == STAGE_COUNT {
                     self.phase = Phase::Won;
                 } else {
@@ -474,7 +536,9 @@ impl Game {
                     self.player = Player::new(vec2(56.0, 175.0));
                     self.camera = 0.0;
                     self.checkpoint = false;
-                    self.lives = 3;
+                    if self.mode == Mode::Campaign {
+                        self.lives = 3;
+                    }
                     self.particles.clear();
                     self.bumped = None;
                     self.phase = Phase::Playing;
@@ -734,7 +798,10 @@ impl Game {
             self.die();
             return;
         }
-        if !self.checkpoint && self.player.pos.x >= self.level.checkpoint.x {
+        if self.mode != Mode::TimeTrial
+            && !self.checkpoint
+            && self.player.pos.x >= self.level.checkpoint.x
+        {
             self.checkpoint = true;
             self.banner_time = 2.0;
             self.sounds.push(SoundEvent::Checkpoint);
@@ -758,6 +825,9 @@ impl Game {
                 treasure,
                 personal_best,
             });
+            if self.mode == Mode::Arcade && self.stage + 1 == STAGE_COUNT {
+                self.progress.arcade_best = self.progress.arcade_best.max(self.score);
+            }
             self.phase = Phase::StageClear;
             self.phase_time = 0.0;
             self.sounds.push(SoundEvent::Clear);
@@ -780,6 +850,111 @@ mod tests {
                 STEP,
             );
         }
+    }
+
+    #[test]
+    fn time_trial_is_a_single_course_without_checkpoint_respawns() {
+        let mut game = Game::new();
+        game.select_time_trial();
+        game.confirm();
+        assert_eq!(game.mode, Mode::TimeTrial);
+        assert_eq!(game.lives, 1);
+        game.player.pos = game.level.checkpoint;
+        game.update(Input::default(), STEP);
+        assert!(!game.checkpoint);
+        game.die();
+        advance(&mut game, 160, Input::default());
+        assert_eq!(game.phase, Phase::GameOver);
+        assert_eq!(game.lives, 0);
+        assert!(!game.progress.levels[0].cleared);
+        game.confirm();
+        assert_eq!(game.phase, Phase::Playing);
+        assert_eq!(game.elapsed_ms(), 0);
+        assert_eq!(game.player.pos, vec2(56.0, 175.0));
+        game.player.pos = vec2(game.level.goal, 130.0);
+        game.update(Input::default(), STEP);
+        let record = game.progress.levels[0].clone();
+        advance(&mut game, 600, Input::default());
+        assert_eq!(game.phase, Phase::StageClear);
+        assert_eq!(game.stage, 0);
+        game.confirm();
+        assert_eq!(game.stage, 0);
+        assert_eq!(game.progress.levels[0], record);
+        assert_eq!(game.elapsed_ms(), 0);
+        game.select_levels();
+        assert_eq!(game.mode, Mode::TimeTrial);
+        game.toggle_trial();
+        game.confirm();
+        assert_eq!(game.mode, Mode::Campaign);
+        assert_eq!(game.lives, 3);
+    }
+
+    #[test]
+    fn arcade_keeps_three_lives_across_courses_and_retries_from_the_start() {
+        let mut game = Game::new();
+        game.start_arcade();
+        game.die();
+        advance(&mut game, 160, Input::default());
+        assert_eq!(game.lives, 2);
+        game.player.pos = vec2(game.level.goal, 130.0);
+        game.update(Input::default(), STEP);
+        advance(&mut game, 313, Input::default());
+        assert_eq!(game.stage, 1);
+        assert_eq!(
+            game.lives, 2,
+            "Arcade does not refill lives at a new course"
+        );
+        game.retry();
+        assert_eq!(game.stage, 0);
+        assert_eq!(game.lives, 3);
+        assert_eq!(game.score, 0);
+        assert_eq!(
+            game.progress.arcade_best, 0,
+            "abandoning a run does not set a record"
+        );
+        game.start_stage(1);
+        assert_eq!(game.stage, 0, "Arcade cannot start partway through");
+        game.score = 1200;
+        for _ in 0..3 {
+            game.die();
+            advance(&mut game, 160, Input::default());
+        }
+        assert_eq!(game.phase, Phase::GameOver);
+        assert_eq!(game.progress.arcade_best, 1200);
+        game.confirm();
+        assert_eq!(game.stage, 0);
+        assert_eq!(game.mode, Mode::Arcade);
+        game.score = 300;
+        for _ in 0..3 {
+            game.die();
+            advance(&mut game, 160, Input::default());
+        }
+        assert_eq!(game.progress.arcade_best, 1200);
+        game.select_levels();
+        game.confirm();
+        assert_eq!(game.stage, 1);
+        assert_eq!(game.mode, Mode::Campaign);
+        assert_eq!(game.progress.arcade_best, 1200);
+    }
+
+    #[test]
+    fn arcade_final_clear_saves_the_full_run_score() {
+        let mut game = Game::new();
+        game.start_arcade();
+        game.die();
+        advance(&mut game, 160, Input::default());
+        for stage in 0..STAGE_COUNT {
+            assert_eq!(game.stage, stage);
+            assert_eq!(game.lives, 2);
+            game.player.pos = vec2(game.level.goal, 130.0);
+            game.update(Input::default(), STEP);
+            if stage + 1 < STAGE_COUNT {
+                assert_eq!(game.progress.arcade_best, 0);
+            }
+            advance(&mut game, 313, Input::default());
+        }
+        assert_eq!(game.phase, Phase::Won);
+        assert_eq!(game.progress.arcade_best, 16_000);
     }
 
     #[test]

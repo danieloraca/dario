@@ -1,9 +1,18 @@
 //! The browser boundary. Simulation, artwork and audio stay shared with desktop.
-use crate::world::{Game, Phase};
+use crate::world::{Game, Mode, Phase};
 
 #[link(wasm_import_module = "env")]
 unsafe extern "C" {
-    fn dario_status(phase: u32, world: u32, coins: u32, lives: u32, muted: u32);
+    fn dario_status(
+        phase: u32,
+        world: u32,
+        coins: u32,
+        lives: u32,
+        muted: u32,
+        mode: u32,
+        seconds: u32,
+        gems: u32,
+    );
     fn dario_take_pause_request() -> u32;
     fn dario_load_progress(pointer: *mut u8, capacity: usize) -> usize;
     fn dario_save_progress(pointer: *const u8, length: usize);
@@ -61,6 +70,13 @@ pub fn update_status(game: &Game, muted: bool) {
             game.coins,
             game.lives as u32,
             u32::from(muted),
+            match game.mode {
+                Mode::Campaign => 0,
+                Mode::TimeTrial => 1,
+                Mode::Arcade => 2,
+            },
+            (game.elapsed_ms() / 1000) as u32,
+            game.challenge_count() as u32,
         )
     }
 }

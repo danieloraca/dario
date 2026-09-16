@@ -1,7 +1,7 @@
 use crate::entities::EnemyKind;
 use macroquad::prelude::*;
 
-use crate::world::{Game, HEIGHT, Phase, STAGE_COUNT, TILE, Tile, WIDTH, time_label};
+use crate::world::{Game, HEIGHT, Mode, Phase, STAGE_COUNT, TILE, Tile, WIDTH, time_label};
 
 const INK: Color = color_u8!(32, 53, 55, 255);
 const CREAM: Color = color_u8!(255, 246, 211, 255);
@@ -585,26 +585,28 @@ fn scenery(game: &Game, width: f32, camera: f32) {
         rect(x + 1.0, 169.0, 22.0, 9.0, color_u8!(226, 178, 110, 255));
         text(">", x + 9.0, 170.0, 1.0, INK);
     }
-    let cp = game.level.checkpoint.x - camera;
-    rect(cp + 3.0, 155.0, 2.0, 37.0, INK);
-    rect(
-        cp + 5.0,
-        156.0,
-        15.0,
-        11.0,
-        if game.checkpoint { GOLD } else { CREAM },
-    );
-    text(
-        "+",
-        cp + 8.0,
-        158.0,
-        1.0,
-        if game.checkpoint {
-            RED
-        } else {
-            color_u8!(105, 150, 113, 255)
-        },
-    );
+    if game.mode != Mode::TimeTrial {
+        let cp = game.level.checkpoint.x - camera;
+        rect(cp + 3.0, 155.0, 2.0, 37.0, INK);
+        rect(
+            cp + 5.0,
+            156.0,
+            15.0,
+            11.0,
+            if game.checkpoint { GOLD } else { CREAM },
+        );
+        text(
+            "+",
+            cp + 8.0,
+            158.0,
+            1.0,
+            if game.checkpoint {
+                RED
+            } else {
+                color_u8!(105, 150, 113, 255)
+            },
+        );
+    }
     let flag = game.level.goal - camera;
     rect(flag + 3.0, 91.0, 3.0, 101.0, INK);
     rect(flag + 3.0, 92.0, 1.0, 100.0, CREAM);
@@ -659,7 +661,17 @@ fn hud(game: &Game, muted: bool, view: Vec2) {
     let extra = view.x - WIDTH;
     rect(0.0, 0.0, view.x, 31.0, INK);
     rect(0.0, 30.0, view.x, 1.0, color_u8!(66, 91, 78, 255));
-    text("DARIO", 12.0, 7.0, 1.0, CREAM);
+    text(
+        match game.mode {
+            Mode::Campaign => "DARIO",
+            Mode::TimeTrial => "TRIAL",
+            Mode::Arcade => "ARCADE",
+        },
+        12.0,
+        7.0,
+        1.0,
+        CREAM,
+    );
     for i in 0..3 {
         heart(12.0 + i as f32 * 11.0, 18.0, i < game.lives);
     }
@@ -766,7 +778,7 @@ fn title(game: &Game, muted: bool, view: Vec2) {
     text("DARIO", x, 61.0 + dy, 7.0, RED);
     text("DARIO", x, 57.0 + dy, 7.0, GOLD);
     centered(
-        "A LITTLE RUST. A LOT OF JUMP.",
+        &format!("ARCADE BEST {:06}", game.progress.arcade_best),
         119.0 + dy,
         1.0,
         INK,
@@ -798,7 +810,14 @@ fn title(game: &Game, muted: bool, view: Vec2) {
         CREAM,
         view.x,
     );
-    centered("L  CHOOSE LEVEL", 174.0 + dy, 1.0, INK, view.x);
+    centered("L LEVELS    T TIME TRIAL", 173.0 + dy, 1.0, INK, view.x);
+    centered(
+        "C ARCADE - 3 LIVES / 16 LEVELS",
+        187.0 + dy,
+        1.0,
+        INK,
+        view.x,
+    );
     if (game.time * 2.0) as i32 % 2 == 0 {
         text(">", 102.0 + dx, 142.0 + dy, 1.0, GOLD);
     }
@@ -1060,22 +1079,42 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
         match game.phase {
             Phase::Paused => panel(
                 "TAKE A BREATHER",
-                "YOUR ADVENTURE CAN WAIT.",
-                "P RESUME   R RETRY   L LEVELS",
+                match game.mode {
+                    Mode::Campaign => "YOUR ADVENTURE CAN WAIT.",
+                    Mode::TimeTrial => "ONE ATTEMPT. NO CHECKPOINTS.",
+                    Mode::Arcade => "THREE LIVES FOR ALL SIXTEEN LEVELS.",
+                },
+                if game.mode == Mode::Arcade {
+                    "P RESUME  R NEW RUN  L LEVELS"
+                } else {
+                    "P RESUME   R RETRY   L LEVELS"
+                },
                 game,
                 view,
             ),
             Phase::GameOver => panel(
                 "ONE MORE TRY?",
-                "EVERY GREAT JUMP STARTS SOMEWHERE.",
+                &if game.mode == Mode::Arcade {
+                    format!("ARCADE BEST {:06}", game.progress.arcade_best)
+                } else {
+                    "EVERY GREAT JUMP STARTS SOMEWHERE.".into()
+                },
                 "ENTER RETRY    L LEVELS",
                 game,
                 view,
             ),
             Phase::Won => panel(
                 "YOU DID IT!",
-                "SIXTEEN LEVELS. ONE LITTLE LEGEND.",
-                "ENTER  PLAY AGAIN",
+                &if game.mode == Mode::Arcade {
+                    format!("ARCADE BEST {:06}", game.progress.arcade_best)
+                } else {
+                    "SIXTEEN LEVELS. ONE LITTLE LEGEND.".into()
+                },
+                if game.mode == Mode::Arcade {
+                    "C NEW ARCADE    L LEVELS"
+                } else {
+                    "ENTER CONTINUE    L LEVELS"
+                },
                 game,
                 view,
             ),
@@ -1090,7 +1129,9 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
                     "NICE RUN!"
                 },
                 game.level.name,
-                if game.stage + 1 == STAGE_COUNT {
+                if game.mode == Mode::TimeTrial {
+                    "ENTER / R RETRY   L LEVELS"
+                } else if game.stage + 1 == STAGE_COUNT {
                     "HOME, SWEET HOME."
                 } else {
                     "ON TO THE NEXT ADVENTURE..."
@@ -1109,7 +1150,17 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
 
 fn level_select(game: &Game, view: Vec2) {
     rect(0.0, 0.0, view.x, view.y, INK);
-    centered("CHOOSE YOUR LEVEL", 20.0, 2.0, GOLD, view.x);
+    centered(
+        if game.mode == Mode::TimeTrial {
+            "TIME TRIAL"
+        } else {
+            "CHOOSE YOUR LEVEL"
+        },
+        20.0,
+        2.0,
+        GOLD,
+        view.x,
+    );
     let left = (view.x - 344.0) / 2.0;
     for stage in 0..STAGE_COUNT {
         let x = left + (stage % 4) as f32 * 88.0;
@@ -1195,8 +1246,19 @@ fn level_select(game: &Game, view: Vec2) {
     );
     centered("C CLEAR  S SPEED  G THREE GEMS", 207.0, 1.0, CREAM, view.x);
     centered(
+        if game.mode == Mode::TimeTrial {
+            "T SWITCH TO CAMPAIGN"
+        } else {
+            "T SWITCH TO TIME TRIAL"
+        },
+        218.0,
+        1.0,
+        GOLD,
+        view.x,
+    );
+    centered(
         "ARROWS SELECT  ENTER PLAY  ESC BACK",
-        view.y - 14.0,
+        view.y - 11.0,
         1.0,
         CREAM,
         view.x,

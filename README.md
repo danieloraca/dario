@@ -34,7 +34,7 @@ sh scripts/serve-web.sh
 
 Open [Dario in your browser](http://127.0.0.1:8080) and press Enter. To use another port, run `sh scripts/serve-web.sh 8081`. Stop the server with Ctrl+C. Rerun the command after editing Rust or web files to rebuild; there is no hot reload.
 
-A keyboard is required. The game fills the browser window and adapts as you resize it, revealing more scenery while keeping the pixel art in proportion. The controls below also work in the browser; **Q returns to the title screen** there. Audio unlocks on your first keypress or click. Leaving the tab pauses the game and silences its audio; press P to resume. Press **F** for fullscreen, which uses the browser's permission rules.
+A keyboard is required. Campaign fills the browser window and adapts as you resize it, revealing more scenery while keeping the pixel art in proportion. Time Trial and Arcade use the same fixed 384 × 240 view on every screen, with letterboxing, so a wider window does not reveal more of the course. The controls below also work in the browser; **Q returns to the title screen** there. Audio unlocks on your first keypress or click. Leaving the tab pauses the game and silences its audio; press P to resume. Press **F** for fullscreen, which uses the browser's permission rules.
 
 For a Raspberry Pi that serves the game on port 3041 and starts it automatically after reboot, use the [systemd deployment guide](deploy/README.md) and [Dario service file](deploy/dario.service). The service runs `target/release/dario-server` from `~/Development/dario`, with `DARIO_ADDR=0.0.0.0:3041`, matching the existing Solitaire service layout.
 
@@ -71,12 +71,18 @@ The game's [build script](build.rs) explicitly imports JavaScript-provided funct
 | M | Mute / unmute all audio |
 | F | Fullscreen / windowed |
 | L | Choose an unlocked level |
-| R | Retry the current level |
+| R | Retry the current level; restart the full run in Arcade |
+| T | Time Trial from the title; switch mode in level selection |
+| C | Start Arcade from the title or an end screen |
 | Q | Quit |
 
 Hold jump when stomping a beetle for an extra bounce. Gold flags halfway through a level mark your checkpoint. Coins are worth 100 points, turquoise challenge gems 500, beetles 200, and each finish 1,000. Dying preserves collected coins and used blocks; restarting begins a fresh run.
 
 Campaign clears unlock the next level permanently. Enter continues at the latest unlocked level; **L** opens level selection (arrows to select, Enter to play). Each level starts with three lives, and retrying keeps previously unlocked levels.
+
+**Time Trial:** press T on the title, choose an unlocked course, then Enter. One life, no checkpoint, and a result screen that stays open. Enter or R starts a fresh attempt; L returns to course selection. Press T in the picker to switch between Campaign and Time Trial.
+
+**Arcade:** press C on the title for all sixteen courses with three lives shared across the entire run. Checkpoints work, but lives do not refill between courses. R restarts from 1-1; L abandons the run for Campaign selection. Your best Arcade score is saved when you finish the final course or lose your last life. Quitting or manually restarting does not record an unfinished run.
 
 Each course has three independent medals: **C** for clearing it, **S** for beating its par time, and **G** for finishing with all three turquoise challenge gems. Earn them across separate attempts. The level picker shows the par time, your fastest finish and highest course score. Time includes deaths and respawns, but excludes pauses, menus and results; collected gems survive checkpoint respawns. Records are awarded at the finish and saved automatically.
 

@@ -31,12 +31,13 @@
     name: "dario_web",
     version: 1,
     register_plugin(imports) {
-      imports.env.dario_status = (phase, world, coins, lives, muted) => {
+      imports.env.dario_status = (phase, world, coins, lives, muted, mode, seconds, gems) => {
         ready = true;
         clearTimeout(loadingTimeout);
         loading.hidden = true;
-        Object.assign(gameCanvas.dataset, { state: phases[phase], world, coins, lives, muted: Boolean(muted) });
-        gameCanvas.setAttribute("aria-label", `Dario: ${phases[phase]}. World ${Math.floor((world - 1) / 4) + 1}-${(world - 1) % 4 + 1}, ${coins} coins, ${lives} lives. Sound ${muted ? "off" : "on"}.`);
+        const modeName = ["campaign", "time-trial", "arcade"][mode];
+        Object.assign(gameCanvas.dataset, { mode: modeName, seconds, gems, state: phases[phase], world, coins, lives, muted: Boolean(muted) });
+        gameCanvas.setAttribute("aria-label", `Dario ${modeName}: ${phases[phase]}. World ${Math.floor((world - 1) / 4) + 1}-${(world - 1) % 4 + 1}, ${coins} coins, ${gems} of 3 gems, ${lives} lives, ${seconds} seconds. Sound ${muted ? "off" : "on"}.`);
         DarioSaves.phase(phases[phase]);
       };
       imports.env.dario_load_progress = DarioSaves.read;
