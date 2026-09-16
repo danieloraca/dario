@@ -157,7 +157,8 @@ fn hill(x: f32, base: f32, radius: f32, height: f32, color: Color) {
 }
 
 fn background(game: &Game, view: Vec2, camera: f32) {
-    let (sky, horizon, far, near, sun) = match game.stage {
+    let theme = game.stage / 4;
+    let (sky, horizon, far, near, sun) = match theme {
         0 => (
             color_u8!(112, 190, 186, 255),
             color_u8!(194, 223, 177, 255),
@@ -166,18 +167,25 @@ fn background(game: &Game, view: Vec2, camera: f32) {
             color_u8!(255, 225, 148, 255),
         ),
         1 => (
-            color_u8!(215, 151, 112, 255),
-            color_u8!(249, 208, 137, 255),
-            color_u8!(175, 169, 111, 255),
-            color_u8!(105, 135, 91, 255),
-            color_u8!(255, 237, 168, 255),
+            color_u8!(25, 34, 61, 255),
+            color_u8!(59, 80, 119, 255),
+            color_u8!(45, 56, 89, 255),
+            color_u8!(67, 106, 146, 255),
+            color_u8!(171, 237, 224, 255),
+        ),
+        2 => (
+            color_u8!(73, 160, 200, 255),
+            color_u8!(201, 233, 223, 255),
+            color_u8!(166, 212, 213, 255),
+            color_u8!(217, 239, 226, 255),
+            color_u8!(255, 240, 188, 255),
         ),
         _ => (
-            color_u8!(94, 105, 147, 255),
-            color_u8!(213, 155, 154, 255),
-            color_u8!(133, 130, 151, 255),
-            color_u8!(76, 105, 117, 255),
-            color_u8!(255, 202, 159, 255),
+            color_u8!(49, 31, 46, 255),
+            color_u8!(138, 66, 58, 255),
+            color_u8!(73, 41, 52, 255),
+            color_u8!(108, 51, 50, 255),
+            color_u8!(255, 171, 96, 255),
         ),
     };
     clear_background(sky);
@@ -198,6 +206,53 @@ fn background(game: &Game, view: Vec2, camera: f32) {
             7.0,
             color,
         );
+    }
+    if theme == 1 {
+        for i in -1..(view.x / 60.0).ceil() as i32 + 2 {
+            let x = i as f32 * 60.0 - (camera * 0.3).rem_euclid(60.0);
+            let height = 36 + (i * 17).rem_euclid(50);
+            for row in 0..height / 4 {
+                let width = ((height / 4 - row) / 2 + 2) as f32;
+                rect(
+                    x + 25.0 - width,
+                    192.0 - row as f32 * 4.0,
+                    width * 2.0,
+                    4.0,
+                    near,
+                );
+                rect(x + 25.0, 192.0 - row as f32 * 4.0, width, 4.0, far);
+            }
+            rect(
+                x,
+                0.0 - extra_height,
+                28.0,
+                41.0 + (i * 11).rem_euclid(29) as f32 + extra_height,
+                far,
+            );
+            rect(
+                x + 24.0,
+                150.0 - (i * 13).rem_euclid(39) as f32,
+                2.0,
+                3.0,
+                sun,
+            );
+        }
+        return;
+    }
+    if theme == 3 {
+        for i in -1..(view.x / 72.0).ceil() as i32 + 2 {
+            let x = i as f32 * 72.0 - (camera * 0.25).rem_euclid(72.0);
+            let top = 66.0 + (i * 17).rem_euclid(55) as f32;
+            rect(x, top, 42.0, 150.0, far);
+            rect(x - 3.0, top, 48.0, 5.0, near);
+            for window in 0..4 {
+                rect(x + 8.0, top + 14.0 + window as f32 * 18.0, 5.0, 7.0, ORANGE);
+                rect(x + 27.0, top + 14.0 + window as f32 * 18.0, 5.0, 7.0, RED);
+            }
+            let ember = (game.time * 12.0 + i as f32 * 31.0).rem_euclid(150.0);
+            rect(x + 50.0, 190.0 - ember, 2.0, 2.0, GOLD);
+        }
+        return;
     }
     let sun_x = view.x - 75.0 - camera * 0.025;
     for y in -19_i32..20 {
@@ -254,7 +309,7 @@ fn background(game: &Game, view: Vec2, camera: f32) {
             Color::new(near.r * 0.83, near.g * 0.83, near.b * 0.83, 1.0),
         );
     }
-    if game.stage == 2 {
+    if theme == 2 {
         for i in 0..(view.x / 24.0).ceil() as i32 {
             let x = (i * 73 + 27) % view.x as i32;
             let y = 36.0 + (i * 31) as f32 % (70.0 + extra_height) - extra_height;
@@ -264,16 +319,42 @@ fn background(game: &Game, view: Vec2, camera: f32) {
 }
 
 fn tile(game: &Game, kind: Tile, tx: i32, ty: i32, x: f32, y: f32) {
+    let (earth, highlight, top, grass) = match game.stage / 4 {
+        1 => (
+            color_u8!(54, 66, 103, 255),
+            color_u8!(74, 88, 134, 255),
+            color_u8!(158, 205, 233, 255),
+            color_u8!(96, 137, 172, 255),
+        ),
+        2 => (
+            color_u8!(81, 120, 141, 255),
+            color_u8!(114, 157, 169, 255),
+            CREAM,
+            color_u8!(187, 222, 220, 255),
+        ),
+        3 => (
+            color_u8!(78, 49, 51, 255),
+            color_u8!(101, 61, 57, 255),
+            color_u8!(215, 103, 54, 255),
+            color_u8!(127, 64, 52, 255),
+        ),
+        _ => (
+            color_u8!(163, 96, 62, 255),
+            color_u8!(180, 112, 70, 255),
+            color_u8!(205, 217, 113, 255),
+            color_u8!(102, 151, 73, 255),
+        ),
+    };
     match kind {
         Tile::Air => {}
         Tile::Ground => {
-            rect(x, y, 16.0, 16.0, color_u8!(163, 96, 62, 255));
-            rect(x + 1.0, y + 1.0, 14.0, 14.0, color_u8!(180, 112, 70, 255));
+            rect(x, y, 16.0, 16.0, earth);
+            rect(x + 1.0, y + 1.0, 14.0, 14.0, highlight);
             if game.level.tile(tx, ty - 1) == Tile::Air {
-                rect(x, y, 16.0, 3.0, color_u8!(205, 217, 113, 255));
-                rect(x, y + 3.0, 16.0, 4.0, color_u8!(102, 151, 73, 255));
-                rect(x + 2.0, y + 6.0, 3.0, 2.0, color_u8!(102, 151, 73, 255));
-                rect(x + 11.0, y + 6.0, 2.0, 3.0, color_u8!(102, 151, 73, 255));
+                rect(x, y, 16.0, 3.0, top);
+                rect(x, y + 3.0, 16.0, 4.0, grass);
+                rect(x + 2.0, y + 6.0, 3.0, 2.0, grass);
+                rect(x + 11.0, y + 6.0, 2.0, 3.0, grass);
             }
             let shift = (tx * 7 + ty * 3).rem_euclid(9) as f32;
             rect(
@@ -598,7 +679,7 @@ fn hud(game: &Game, muted: bool, view: Vec2) {
         color_u8!(156, 184, 160, 255),
     );
     text(
-        &format!("1-{}", game.stage + 1),
+        &crate::levels::world_label(game.stage),
         225.0 + extra * 0.6,
         18.0,
         1.0,
@@ -948,7 +1029,7 @@ pub fn draw_ui(game: &Game, muted: bool, view: Vec2) {
             ),
             Phase::Won => panel(
                 "YOU DID IT!",
-                "THREE WORLDS. ONE LITTLE LEGEND.",
+                "SIXTEEN LEVELS. ONE LITTLE LEGEND.",
                 "ENTER  PLAY AGAIN",
                 game,
                 view,
@@ -993,7 +1074,7 @@ fn level_select(game: &Game, view: Vec2) {
             },
         );
         let label = if unlocked {
-            format!("1-{}", stage + 1)
+            crate::levels::world_label(stage)
         } else {
             "LOCKED".into()
         };
@@ -1009,14 +1090,31 @@ fn level_select(game: &Game, view: Vec2) {
             },
         );
         if game.progress.levels[stage].cleared {
-            text("CLEAR", x + 8.0, y + 16.0, 1.0, INK);
+            text(
+                "CLEAR",
+                x + 8.0,
+                y + 16.0,
+                1.0,
+                if stage == game.selected_stage {
+                    INK
+                } else {
+                    GOLD
+                },
+            );
         }
     }
     centered(
-        crate::world::Level::new(game.selected_stage).name,
+        crate::levels::COURSES[game.selected_stage].name,
         187.0,
         1.0,
         CREAM,
+        view.x,
+    );
+    centered(
+        crate::levels::WORLD_NAMES[game.selected_stage / 4],
+        204.0,
+        1.0,
+        GOLD,
         view.x,
     );
     centered(

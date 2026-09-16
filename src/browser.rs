@@ -53,7 +53,11 @@ pub fn update_status(game: &Game, muted: bool) {
     unsafe {
         dario_status(
             phase,
-            game.stage as u32 + 1,
+            if game.phase == Phase::LevelSelect {
+                game.selected_stage as u32 + 1
+            } else {
+                game.stage as u32 + 1
+            },
             game.coins,
             game.lives as u32,
             u32::from(muted),

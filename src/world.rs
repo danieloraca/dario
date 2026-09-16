@@ -2,7 +2,7 @@ use crate::entities::{Enemy, EnemyKind, FireJet, Platform};
 use dario_progress::Progress;
 use macroquad::prelude::{Rect, Vec2, vec2};
 
-pub const STAGE_COUNT: usize = 3;
+pub const STAGE_COUNT: usize = dario_progress::LEVEL_COUNT;
 pub const WIDTH: f32 = 384.0;
 pub const HEIGHT: f32 = 240.0;
 pub const TILE: f32 = 16.0;
@@ -111,78 +111,32 @@ pub struct Level {
 
 impl Level {
     pub fn new(stage: usize) -> Self {
-        let (name, width, gaps): (&str, usize, &[(usize, usize)]) = match stage {
-            0 => (
-                "SUNNY SIDE UP",
-                150,
-                &[(29, 31), (62, 65), (99, 102), (121, 124)],
-            ),
-            1 => (
-                "THE GOLDEN HOUR",
-                164,
-                &[(24, 27), (48, 51), (91, 94), (116, 120), (140, 143)],
-            ),
-            _ => (
-                "ONE MORE SUNSET",
-                178,
-                &[(30, 34), (56, 59), (83, 87), (114, 118), (145, 149)],
-            ),
-        };
+        let course = &crate::levels::COURSES[stage];
+        let width = course.width;
         let mut level = Self {
-            name,
+            name: course.name,
             width,
             tiles: vec![Tile::Air; width * 15],
             coins: vec![],
             enemies: vec![],
-            checkpoint: vec2(74.0 * TILE, 12.0 * TILE - PLAYER_H),
+            checkpoint: vec2(course.checkpoint as f32 * TILE, 12.0 * TILE - PLAYER_H),
             goal: (width - 10) as f32 * TILE,
             platforms: vec![],
             fire: vec![],
             clock: 0.0,
         };
         for x in 0..width {
-            if !gaps.iter().any(|&(start, end)| (start..end).contains(&x)) {
+            if !course
+                .gaps
+                .iter()
+                .any(|&(start, end)| (start..end).contains(&x))
+            {
                 for y in 12..15 {
                     level.set(x, y, Tile::Ground);
                 }
             }
         }
-
-        // Hand-placed beats: a safe introduction, low platforms, then wider jumps.
-        let blocks: &[(usize, usize, usize)] = match stage {
-            0 => &[
-                (12, 9, 5),
-                (22, 8, 3),
-                (38, 9, 5),
-                (53, 8, 4),
-                (80, 9, 5),
-                (109, 9, 4),
-                (129, 9, 3),
-            ],
-            1 => &[
-                (10, 9, 4),
-                (19, 7, 3),
-                (35, 9, 5),
-                (58, 9, 4),
-                (64, 7, 4),
-                (81, 9, 5),
-                (102, 8, 5),
-                (126, 9, 5),
-            ],
-            _ => &[
-                (12, 9, 4),
-                (22, 7, 4),
-                (40, 9, 5),
-                (49, 7, 3),
-                (66, 9, 4),
-                (92, 9, 5),
-                (104, 7, 3),
-                (126, 9, 5),
-                (136, 7, 4),
-                (154, 9, 4),
-            ],
-        };
-        for &(x, y, len) in blocks {
+        for &(x, y, len) in course.blocks {
             for n in 0..len {
                 level.set(
                     x + n,
@@ -198,63 +152,64 @@ impl Level {
                 }
             }
         }
-        let pipes: &[(usize, usize)] = match stage {
-            0 => &[(19, 2), (46, 2), (89, 3), (116, 2)],
-            1 => &[(30, 2), (44, 3), (98, 2), (135, 3)],
-            _ => &[(18, 2), (37, 3), (62, 2), (99, 3), (121, 2), (160, 2)],
-        };
-        for &(x, height) in pipes {
+        for &(x, height) in course.pipes {
             for y in 12 - height..12 {
                 level.set(x, y, Tile::PipeLeft);
                 level.set(x + 1, y, Tile::PipeRight);
             }
         }
-        for &(start, end) in gaps {
+        for &(start, end) in course.gaps {
             for x in start.saturating_sub(1)..=end {
                 level.add_coin(x, if x >= start && x < end { 8 } else { 9 });
             }
         }
-        for x in [7, 8, 9, 70, 71, 72] {
+        for x in [
+            7,
+            8,
+            9,
+            course.checkpoint - 4,
+            course.checkpoint - 3,
+            course.checkpoint - 2,
+        ] {
             level.add_coin(x, 10);
         }
-        let enemies: &[usize] = match stage {
-            0 => &[23, 40, 56, 84, 96, 111, 131],
-            1 => &[17, 39, 60, 84, 106, 128, 147],
-            _ => &[25, 44, 68, 79, 94, 109, 130, 151, 164],
-        };
         for n in 0..4 {
             for y in 12 - n..12 {
                 level.set(width - 16 + n, y, Tile::Stone);
             }
         }
-        for &x in enemies {
-            let mut surface = 12;
+        for &(x, feet, kind) in course.enemies {
+            let mut surface = feet as i32;
             while level.tile(x as i32, surface - 1) != Tile::Air {
                 surface -= 1;
             }
-            level
-                .enemies
-                .push(Enemy::new(x as f32 * TILE, surface as f32 * TILE - 12.0));
+            let mut enemy = Enemy::new(x as f32 * TILE, surface as f32 * TILE - 12.0);
+            enemy.kind = kind;
+            level.enemies.push(enemy);
         }
-        // A safe introduction to the new mechanics before the expanded worlds.
-        if stage == 1 {
-            level.platforms.push(Platform::moving(
-                67.0 * TILE,
-                8.0 * TILE,
-                3.0 * TILE,
-                vec2(24.0, 0.0),
-            ));
-            level.enemies[2].kind = EnemyKind::Hopper;
-        } else if stage == 2 {
-            level
-                .platforms
-                .push(Platform::crumbling(84.0 * TILE, 11.0 * TILE, 2.0 * TILE));
-            level
-                .enemies
-                .push(Enemy::of_kind(120.0 * TILE, 7.0 * TILE, EnemyKind::Flyer));
+        for platform in course.platforms {
+            level.platforms.push(if platform.crumble {
+                Platform::crumbling(
+                    platform.x as f32 * TILE,
+                    platform.y as f32 * TILE,
+                    platform.width as f32 * TILE,
+                )
+            } else {
+                Platform::moving(
+                    platform.x as f32 * TILE,
+                    platform.y as f32 * TILE,
+                    platform.width as f32 * TILE,
+                    vec2(
+                        platform.travel.0 as f32 * TILE,
+                        platform.travel.1 as f32 * TILE,
+                    ),
+                )
+            });
+        }
+        for &(x, offset) in course.fire {
             level
                 .fire
-                .push(FireJet::new(134.0 * TILE, 12.0 * TILE, 0.0));
+                .push(FireJet::new(x as f32 * TILE, 12.0 * TILE, offset));
         }
         level
     }
@@ -967,10 +922,10 @@ mod tests {
     }
 
     #[test]
-    fn all_three_exits_advance_to_victory() {
+    fn all_courses_advance_to_victory() {
         let mut game = Game::new();
         game.start();
-        for stage in 0..3 {
+        for stage in 0..STAGE_COUNT {
             assert_eq!(game.stage, stage);
             game.player.pos.x = game.level.goal;
             game.player.pos.y = 130.0;
@@ -979,7 +934,7 @@ mod tests {
             advance(&mut game, 320, Input::default());
         }
         assert_eq!(game.phase, Phase::Won);
-        assert_eq!(game.score, 3000);
+        assert_eq!(game.score, STAGE_COUNT as u32 * 1000);
     }
 
     #[test]
@@ -1007,9 +962,14 @@ mod tests {
 
     #[test]
     fn each_level_has_safe_spawn_checkpoint_and_exit() {
-        for stage in 0..3 {
+        for stage in 0..STAGE_COUNT {
             let level = Level::new(stage);
-            for x in [3, 4, 74, (level.goal / TILE) as i32] {
+            for x in [
+                3,
+                4,
+                (level.checkpoint.x / TILE) as i32,
+                (level.goal / TILE) as i32,
+            ] {
                 assert_ne!(level.tile(x, 12), Tile::Air);
                 assert_eq!(level.tile(x, 11), Tile::Air);
             }
@@ -1017,6 +977,83 @@ mod tests {
                 assert!(
                     level.solids(enemy.rect()).is_empty(),
                     "enemy spawned inside terrain in stage {stage}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn authored_flyer_paths_stay_clear_of_terrain() {
+        for stage in 0..STAGE_COUNT {
+            let level = Level::new(stage);
+            for flyer in level
+                .enemies
+                .iter()
+                .filter(|enemy| enemy.kind == EnemyKind::Flyer)
+            {
+                let mut game = Game::new();
+                game.level = Level::new(stage);
+                game.player.pos.x = flyer.origin.x;
+                game.level.enemies = vec![Enemy::of_kind(
+                    flyer.origin.x,
+                    flyer.origin.y,
+                    EnemyKind::Flyer,
+                )];
+                // The two orbit frequencies repeat together after 5 PI seconds.
+                for _ in 0..1900 {
+                    game.move_enemies(STEP);
+                    let enemy = &game.level.enemies[0];
+                    assert!(
+                        game.level.solids(enemy.rect()).is_empty(),
+                        "{}: flyer at {:?} crosses terrain at {:?}",
+                        game.level.name,
+                        flyer.origin,
+                        enemy.pos
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_course_gap_has_a_landable_running_jump() {
+        for (stage, course) in crate::levels::COURSES.iter().enumerate() {
+            for &(start, end) in course.gaps {
+                let mut game = Game::new();
+                game.start();
+                game.stage = stage;
+                game.level = Level::new(stage);
+                game.level.enemies.clear();
+                game.level.fire.clear();
+                game.player.pos = vec2(start as f32 * TILE - 20.0, 175.0);
+                advance(&mut game, 2, Input::default());
+                game.player.vel.x = 164.0;
+                advance(
+                    &mut game,
+                    110,
+                    Input {
+                        axis: 1.0,
+                        run: true,
+                        jump_pressed: true,
+                        jump_held: true,
+                    },
+                );
+                // A platform can interrupt the jump and leave a short drop to
+                // the far bank. Brake there and allow that landing to finish.
+                if !game.player.grounded {
+                    advance(&mut game, 60, Input::default());
+                }
+                assert_eq!(
+                    game.phase,
+                    Phase::Playing,
+                    "{}: gap {start}-{end}",
+                    course.name
+                );
+                assert!(
+                    game.player.pos.x + PLAYER_W > end as f32 * TILE && game.player.grounded,
+                    "{}: cannot land after gap {start}-{end}: {:?}",
+                    course.name,
+                    game.player.pos
                 );
             }
         }

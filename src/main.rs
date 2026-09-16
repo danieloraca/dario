@@ -2,6 +2,7 @@ mod art;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 mod entities;
+mod levels;
 mod sound;
 #[cfg(not(target_arch = "wasm32"))]
 mod storage;
@@ -175,17 +176,38 @@ async fn run(muted: bool, smoke: bool) {
                 102 => game.toggle_pause(),
                 104 => {
                     game.toggle_pause();
-                    game.stage = 1;
-                    game.level = world::Level::new(1);
+                    game.stage = 4;
+                    game.level = world::Level::new(4);
+                    game.player = world::Player::new(vec2(70.0 * world::TILE, 175.0));
+                    game.player.invulnerable = 2.0;
+                    game.phase = Phase::Playing;
+                    game.camera = game.player.pos.x - 136.0;
                 }
                 106 => {
-                    game.stage = 2;
-                    game.level = world::Level::new(2);
-                    game.player.pos = vec2(game.level.goal - 70.0, 125.0);
-                    game.camera = game.level.goal - 240.0;
+                    game.stage = 8;
+                    game.level = world::Level::new(8);
+                    game.player = world::Player::new(vec2(50.0 * world::TILE, 175.0));
+                    game.player.invulnerable = 2.0;
+                    game.phase = Phase::Playing;
+                    game.camera = game.player.pos.x - 136.0;
                 }
-                108 => game.phase = Phase::Won,
-                110 => break,
+                108 => {
+                    game.stage = 15;
+                    game.level = world::Level::new(15);
+                    game.level.clock = 0.5;
+                    game.player = world::Player::new(vec2(42.0 * world::TILE, 175.0));
+                    game.player.invulnerable = 2.0;
+                    game.phase = Phase::Playing;
+                    game.camera = game.player.pos.x - 136.0;
+                }
+                110 => game.phase = Phase::Won,
+                112 => {
+                    for record in &mut game.progress.levels {
+                        record.cleared = true;
+                    }
+                    game.select_levels();
+                }
+                114 => break,
                 _ => {}
             }
             input.axis = if (2..102).contains(&frame) { 1.0 } else { 0.0 };
@@ -262,7 +284,14 @@ async fn run(muted: bool, smoke: bool) {
         );
         #[cfg(target_arch = "wasm32")]
         {
-            let status = (game.phase, game.stage, game.coins, game.lives, audio.muted);
+            let status = (
+                game.phase,
+                game.stage,
+                game.selected_stage,
+                game.coins,
+                game.lives,
+                audio.muted,
+            );
             if browser_status != Some(status) {
                 browser::update_status(&game, audio.muted);
                 browser_status = Some(status);
@@ -273,9 +302,11 @@ async fn run(muted: bool, smoke: bool) {
                 1 => Some("title"),
                 101 => Some("playing"),
                 103 => Some("paused"),
-                105 => Some("golden-hour"),
-                107 => Some("sunset"),
-                109 => Some("victory"),
+                105 => Some("crystal-caves"),
+                107 => Some("skyworks"),
+                109 => Some("ember-fortress"),
+                111 => Some("victory"),
+                113 => Some("level-select"),
                 _ => None,
             };
             if let Some(name) = screenshot {

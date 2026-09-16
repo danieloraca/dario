@@ -36,7 +36,7 @@
         clearTimeout(loadingTimeout);
         loading.hidden = true;
         Object.assign(gameCanvas.dataset, { state: phases[phase], world, coins, lives, muted: Boolean(muted) });
-        gameCanvas.setAttribute("aria-label", `Dario: ${phases[phase]}. World 1-${world}, ${coins} coins, ${lives} lives. Sound ${muted ? "off" : "on"}.`);
+        gameCanvas.setAttribute("aria-label", `Dario: ${phases[phase]}. World ${Math.floor((world - 1) / 4) + 1}-${(world - 1) % 4 + 1}, ${coins} coins, ${lives} lives. Sound ${muted ? "off" : "on"}.`);
         DarioSaves.phase(phases[phase]);
       };
       imports.env.dario_load_progress = DarioSaves.read;

@@ -2,7 +2,7 @@
 
 A little Rust. A lot of jump.
 
-A small, original 1980s-style platformer written in Rust. Run through three scrolling worlds, collect coins, bump coin blocks, hop over pipes and pits, stomp beetles, and reach the flag. Three lives, a checkpoint in each world, and one very determined little adventurer.
+A small, original 1980s-style platformer written in Rust. Run through sixteen scrolling levels across four worlds, collect coins, bump coin blocks, hop over pipes and pits, stomp beetles, and reach the flag. Three lives per level, a checkpoint in each course, and one very determined little adventurer.
 
 ## Play
 
@@ -84,7 +84,8 @@ In the browser, enter a player name before playing; the browser remembers it. Us
 
 ## The little details
 
-- Three handmade stages: **Sunny Side Up**, **The Golden Hour**, and **One More Sunset**.
+- Sixteen authored stages across **Sunny Hills**, **Crystal Caves**, **Skyworks** and **Ember Fortress**, with a finale in each world.
+- Moving lifts, collapsing floors, hopping and flying beetles, and fire jets with a visible warning before they ignite. The course definitions live in `src/levels.rs`.
 - A 384 × 240 base canvas, an expanding browser viewport, nearest-neighbor scaling (integer scaling on desktop), parallax hills, animated coins, and a bold, homemade 7×7 arcade alphabet.
 - Fixed 120 Hz physics, acceleration, variable jump height, a small grace period after leaving ledges, and buffered jumps just before landing.
 - An original 16-bar chiptune with pulse-wave melody, triangle bass, arpeggios, and synthesized noise drums. Seven synthesized effects cover jumping, coins, bumps, stomps, damage, checkpoints, and finishes.
@@ -101,7 +102,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -- --smoke-test
 ```
 
-The smoke test opens a real game window, simulates movement and a jump, and writes screenshots of the title, gameplay, pause, both later palettes, and victory to `target/smoke/`. It requires a graphical desktop and uses staged states to exercise the later screens; it is not an automated playthrough of every level.
+The smoke test opens a real game window, simulates movement and a jump, and writes screenshots of the title, gameplay, pause, all four world themes, victory and level selection to `target/smoke/`. It requires a graphical desktop and uses staged states to exercise the later screens; it is not an automated playthrough of every level.
 
 ```sh
 cargo run -- --mute           # Start quietly
